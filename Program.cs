@@ -4,34 +4,19 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Linq;
-using Terminal.Gui;
 using LibreHardwareMonitor.Hardware;
 using TSysWatch;
-using Terminal.Gui.App;
-using Terminal.Gui.Views;
-using Terminal.Gui.ViewBase;
+
 using System.Data;
-using Terminal.Gui.Configuration;
 
 internal class Program
 {
 
 
 
-    public class MonitorWindow : Window
+    public class MonitorWindow
     {
-        private TableView processTable;
-        private TableView hardwareTable;
-        public MonitorWindow()
-        {
-            Title = "TSysWatch Monitor";
-            processTable = new TableView { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Percent(40) };
-            Add(processTable);
-            hardwareTable = new TableView { X = 0, Y = Pos.Bottom(processTable), Width = Dim.Fill(), Height = Dim.Fill() };
-            Add(hardwareTable);
-            
-            Task.Run(RunMonitor);
-        }
+
 
         public void RunMonitor()
         {
@@ -57,11 +42,7 @@ internal class Program
             _computer.Accept(new UpdateVisitor());
             logger.Information("Hardware monitoring started.");
             StringBuilder stringBuilder = new StringBuilder();
-            // ========== Terminal.Gui 表格界面 ========== //
-            // 只初始化一次
-            bool guiStarted = false;
-
-            System.Timers.Timer guiTimer = null;
+   
 
             while (true)
             {
@@ -89,6 +70,7 @@ internal class Program
                     foreach (var process in processes)
                     {
                         stringBuilder.AppendLine($"{process.ProcessName,-50} {process.PID,-10} {process.MemoryUsage.ToString("F2"),-20} {process.PrivateMemorySize.ToString("F2"),-20} {process.HandleCount,-15} ");
+                     
                     }
                     stringBuilder.AppendLine("-- End of Process Information --");
 
@@ -132,91 +114,52 @@ internal class Program
                                 hardwareRows.Add(new object[] { hardware.Name, sensor.Name, sensor.Value.Value.ToString("F2"), unit });
                             }
                         }
-                        if (hardware.HardwareType == HardwareType.Motherboard)
+
+                        foreach (var subHardware in hardware.SubHardware)
                         {
-                            foreach (var subHardware in hardware.SubHardware)
+                            subHardware.Update();
+                            stringBuilder.AppendLine($"Sub Hardware: {subHardware.Name}");
+                            stringBuilder.AppendLine($"{"Sensor",-30} {"Value",-20} {"Unit",-10}");
+                            foreach (var subSensor in subHardware.Sensors)
                             {
-                                subHardware.Update();
-                                stringBuilder.AppendLine($"Sub Hardware: {subHardware.Name}");
-                                stringBuilder.AppendLine($"{"Sensor",-30} {"Value",-20} {"Unit",-10}");
-                                foreach (var subSensor in subHardware.Sensors)
+                                if (subSensor.Value.HasValue)
                                 {
-                                    if (subSensor.Value.HasValue)
+                                    string subUnit = subSensor.SensorType switch
                                     {
-                                        string subUnit = subSensor.SensorType switch
-                                        {
-                                            SensorType.Temperature => "°C",
-                                            SensorType.Voltage => "V",
-                                            SensorType.Fan => "RPM",
-                                            SensorType.Power => "W",
-                                            SensorType.Load => "%",
-                                            SensorType.Clock => "MHz",
-                                            SensorType.Data => "Data",
-                                            SensorType.Flow => "L/h",
-                                            SensorType.Level => "%",
-                                            SensorType.Frequency => "Hz",
-                                            SensorType.Current => "A",
-                                            SensorType.Energy => "J",
-                                            SensorType.Control => "",
-                                            SensorType.Factor => "",
-                                            SensorType.SmallData => "",
-                                            SensorType.Throughput => "",
-                                            SensorType.TimeSpan => "",
-                                            SensorType.Noise => "dB",
-                                            SensorType.Conductivity => "",
-                                            SensorType.Humidity => "",
-                                            _ => ""
-                                        };
-                                        stringBuilder.AppendLine($"{subSensor.Name,-30} {subSensor.Value.Value.ToString("F2"),-20} {subUnit,-10}");
-                                        hardwareRows.Add(new object[] { $"{hardware.Name} - {subHardware.Name}", subSensor.Name, subSensor.Value.Value.ToString("F2"), subUnit });
-                                    }
+                                        SensorType.Temperature => "°C",
+                                        SensorType.Voltage => "V",
+                                        SensorType.Fan => "RPM",
+                                        SensorType.Power => "W",
+                                        SensorType.Load => "%",
+                                        SensorType.Clock => "MHz",
+                                        SensorType.Data => "Data",
+                                        SensorType.Flow => "L/h",
+                                        SensorType.Level => "%",
+                                        SensorType.Frequency => "Hz",
+                                        SensorType.Current => "A",
+                                        SensorType.Energy => "J",
+                                        SensorType.Control => "",
+                                        SensorType.Factor => "",
+                                        SensorType.SmallData => "",
+                                        SensorType.Throughput => "",
+                                        SensorType.TimeSpan => "",
+                                        SensorType.Noise => "dB",
+                                        SensorType.Conductivity => "",
+                                        SensorType.Humidity => "",
+                                        _ => ""
+                                    };
+                                    stringBuilder.AppendLine($"{subSensor.Name,-30} {subSensor.Value.Value.ToString("F2"),-20} {subUnit,-10}");
+                                    hardwareRows.Add(new object[] { $"{hardware.Name} - {subHardware.Name}", subSensor.Name, subSensor.Value.Value.ToString("F2"), subUnit });
                                 }
                             }
                         }
+
                     }
                     string report = _computer.GetReport();
                     stringBuilder.AppendLine("-- End of Hardware Information --");
-                    // Console.WriteLine(stringBuilder.ToString());
+                    Console.WriteLine(stringBuilder.ToString());
                     logger.Information(stringBuilder.ToString());
 
-                    // ========== Terminal.Gui 2.x 表格刷新 ========== //
-
-                    if (processTable != null && hardwareTable != null)
-                    {
-                        var processHeaders = new[] { "Process Name", "PID", "Memory Usage (MB)", "PeakWorkingSet64 (MB)", "Handle Count" };
-                        var processRows = processes.Select(p => new object[]
-                            { p.ProcessName, p.PID, p.MemoryUsage.ToString("F2"), p.PrivateMemorySize.ToString("F2"), p.HandleCount }).ToList();
-
-                        Application.Invoke(() =>
-                        {
-                            // 更新表格数据
-                            // 把processHeaders 和 processRows 转换为 DataTable
-                            DataTable processDataTable = new DataTable();
-                            foreach (var header in processHeaders)
-                            {
-                                processDataTable.Columns.Add(header);
-                            }
-                            foreach (var row in processRows)
-                            {
-                                processDataTable.Rows.Add(row);
-                            }
-
-                            processTable.Table = new DataTableSource(processDataTable); //(processRows, processHeaders);
-                            var hardwareHeaders = new[] { "Hardware", "Sensor", "Value", "Unit" };
-                            // 把hardwareRows 转换为 DataTable
-                            DataTable hardwareDataTable = new DataTable();
-                            foreach (var header in hardwareHeaders)
-                            {
-                                hardwareDataTable.Columns.Add(header);
-                            }
-                            foreach (var row in hardwareRows)
-                            {
-                                hardwareDataTable.Rows.Add(row);
-                            }
-                            hardwareTable.Table = new DataTableSource(hardwareDataTable);
-                        });
-
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -228,12 +171,8 @@ internal class Program
     }
     private static void Main(string[] args)
     {
-        // 读取exit退出 
-        ConfigurationManager.RuntimeConfig = """{ "Theme": "Light" }""";
-        ConfigurationManager.Enable(ConfigLocations.All);
-        Application.Run<MonitorWindow>().Dispose();
-
-        Application.Shutdown();
+        MonitorWindow monitorWindow = new MonitorWindow();
+        monitorWindow.RunMonitor();
 
     }
 
