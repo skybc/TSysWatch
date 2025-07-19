@@ -1,0 +1,23 @@
+# 自动删除文件配置
+# 格式：[磁盘驱动器]
+# DeleteDirectories=目录1,目录2,目录3
+# StartDeleteSizeGB=开始删除时的磁盘剩余空间(GB)
+# StopDeleteSizeGB=停止删除时的磁盘剩余空间(GB)
+
+# C盘配置
+[C:]
+DeleteDirectories=C:\temp,C:\Windows\temp,C:\Users\Public\temp
+StartDeleteSizeGB=5.0
+StopDeleteSizeGB=10.0
+
+# D盘配置
+[D:]
+DeleteDirectories=D:\temp,D:\logs,D:\cache
+StartDeleteSizeGB=10.0
+StopDeleteSizeGB=20.0
+
+# E盘配置
+[E:]
+DeleteDirectories=E:\temp,E:\backup\old
+StartDeleteSizeGB=15.0
+StopDeleteSizeGB=25.0

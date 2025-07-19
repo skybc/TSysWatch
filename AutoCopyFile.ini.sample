@@ -1,0 +1,16 @@
+# 自动拷贝文件配置
+# 支持配置多个拷贝任务，每个任务使用[CopyTask]开始
+
+[CopyTask]
+# 源目录 - 要拷贝的图片文件所在目录
+SourceDirectory=D:\Photos
+# 目标目录 - 拷贝到的目标目录
+TargetDirectory=E:\Backup\Photos
+# 已拷贝文件移动目录 - 拷贝完成后将源文件移动到此目录（可选，如果不设置则删除源文件）
+MovedDirectory=D:\Photos_Processed
+
+# 可以添加更多拷贝任务
+[CopyTask]
+SourceDirectory=C:\Images
+TargetDirectory=D:\Backup\Images
+MovedDirectory=C:\Images_Processed

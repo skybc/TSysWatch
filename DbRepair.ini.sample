@@ -1,0 +1,3 @@
+# DbRepair数据库修复功能配置
+# 是否启用数据库修复功能，true=启用，false=禁用
+Enabled=true
