@@ -316,6 +316,7 @@ internal class Program
         DbRepair.Start();
         AutoDeleteFile.Start();
         AutoCopyFile.Start();
+        AutoMoveFile.Start();
         monitorWindow.RunMonitor();
 
     }

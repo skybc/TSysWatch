@@ -1,0 +1,9 @@
+=== 文件移动记录 ===
+格式：[时间] 操作 - 源文件路径 => 目标文件路径 (文件大小)
+
+[2025-07-19 14:30:15] 移动 - D:\MoveSource\document.pdf => E:\MoveTarget\document.pdf (1.23 MB) - 成功
+[2025-07-19 14:30:16] 移动 - D:\MoveSource\子目录\image.jpg => E:\MoveTarget\子目录\image.jpg (856.45 KB) - 成功  
+[2025-07-19 14:30:17] 移动 - D:\MoveSource\file.txt => E:\MoveTarget\file(1).txt (2.1 KB) - 成功
+[2025-07-19 14:30:18] 移动 - D:\MoveSource\data.xlsx => 失败 (1.5 MB) - 文件被占用
+[2025-07-19 14:30:19] 移动 - D:\MoveSource\音频\music.mp3 => E:\MoveTarget\音频\music.mp3 (4.2 MB) - 成功
+[2025-07-19 14:30:20] 移动 - D:\MoveSource\backup.zip => E:\MoveTarget\backup(1).zip (125.6 MB) - 成功
