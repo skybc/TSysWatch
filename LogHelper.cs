@@ -1,5 +1,6 @@
 using Serilog;
 using Serilog.Core;
+using ILogger = Serilog.ILogger;
 
 namespace TSysWatch
 {

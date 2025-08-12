@@ -229,11 +229,12 @@ internal class Program
                     //db.Deleteable<RealTimeData>().Where(r => r.CreateTime < DateTime.Now.AddDays(-30));
                     lastDeleteTime = DateTime.Now;
                     //删除一个月前的空表
-                    var tableNames= db.DbMaintenance.GetTableInfoList(false).Where(r => r.Name.StartsWith("RealTimeData")).Select(r=>r.Name).ToList();
+                    var tableNames = db.DbMaintenance.GetTableInfoList(false).Where(r => r.Name.StartsWith("RealTimeData")).Select(r => r.Name).ToList();
                     // 查找小于RealTimeData_yyyyMMdd 30天前的数据表
                     string beginDeleteTableName = $"RealTimeData_{DateTime.Now.AddDays(-30).ToString("yyyyMMdd")}";
                     var deleteTablenames = tableNames.Where(r => r.CompareTo(beginDeleteTableName) < 0);
-                    foreach (var table in deleteTablenames) { 
+                    foreach (var table in deleteTablenames)
+                    {
                         db.DbMaintenance.DropTable(table);
                     }
                     // 执行数据收缩
@@ -310,6 +311,7 @@ internal class Program
 
         }
     }
+
     private static void Main(string[] args)
     {
         MonitorWindow monitorWindow = new MonitorWindow();
@@ -317,7 +319,17 @@ internal class Program
         AutoDeleteFile.Start();
         AutoCopyFile.Start();
         AutoMoveFile.Start();
-        monitorWindow.RunMonitor();
+        Task.Run(monitorWindow.RunMonitor);
+        var builder = WebApplication.CreateBuilder(args).Inject();
+        builder.Services.AddControllersWithViews().AddInject();
+        var app = builder.Build().UseDefaultServiceProvider();
+        // app.UseHttpsRedirection();
+        app.UseStaticFiles();
+        app.UseAuthorization();
+        app.UseInject();
+        app.MapDefaultControllerRoute();
+        app.MapControllers();
+        app.Run();
 
     }
 
