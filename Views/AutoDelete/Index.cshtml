@@ -1,0 +1,251 @@
+@using TSysWatch
+@model List<DiskCleanupConfig>
+@{
+    ViewData["Title"] = "自动删除文件管理";
+}
+
+<h2>自动删除文件管理</h2>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>当前配置</h4>
+            </div>
+            <div class="card-body">
+                <div id="configList">
+                    <p class="text-muted">正在加载配置...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>磁盘状态</h4>
+            </div>
+            <div class="card-body">
+                <div id="driveList">
+                    <p class="text-muted">正在加载磁盘信息...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>删除条件测试工具</h4>
+            </div>
+            <div class="card-body">
+                <form id="testForm">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label>驱动器:</label>
+                            <select class="form-control" id="testDrive">
+                                <option value="C:">C:</option>
+                                <option value="D:">D:</option>
+                                <option value="E:">E:</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>文件路径:</label>
+                            <input type="text" class="form-control" id="testFilePath" placeholder="例: C:\temp\test.txt">
+                        </div>
+                        <div class="col-md-2">
+                            <label>容量阈值(GB):</label>
+                            <input type="number" class="form-control" id="testSizeGB" value="10" step="0.1">
+                        </div>
+                        <div class="col-md-2">
+                            <label>时间阈值(天):</label>
+                            <input type="number" class="form-control" id="testDays" value="30">
+                        </div>
+                        <div class="col-md-2">
+                            <label>逻辑模式:</label>
+                            <select class="form-control" id="testLogic">
+                                <option value="OR">OR (或)</option>
+                                <option value="AND">AND (且)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button type="button" class="btn btn-primary" onclick="testDeleteCondition()">测试删除条件</button>
+                        </div>
+                    </div>
+                </form>
+                <div id="testResult" class="mt-3" style="display: none;">
+                    <div class="alert" id="testResultAlert">
+                        <div id="testResultContent"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>配置说明</h4>
+            </div>
+            <div class="card-body">
+                <h5>配置项说明：</h5>
+                <ul>
+                    <li><strong>StartDeleteSizeGB</strong>: 开始删除时的磁盘剩余空间阈值(GB)</li>
+                    <li><strong>StopDeleteSizeGB</strong>: 停止删除时的磁盘剩余空间阈值(GB)</li>
+                    <li><strong>StartDeleteFileDays</strong>: 开始删除文件时间阈值(天)，0表示不限制时间</li>
+                    <li><strong>LogicMode</strong>: 删除条件逻辑关系
+                        <ul>
+                            <li><strong>OR</strong>: 满足容量或时间条件之一即可删除</li>
+                            <li><strong>AND</strong>: 必须同时满足容量和时间条件才删除</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <h5>使用场景示例：</h5>
+                <ul>
+                    <li><strong>OR + 容量阈值</strong>: 磁盘空间不足时立即清理文件</li>
+                    <li><strong>OR + 时间阈值</strong>: 定期清理超过N天的旧文件</li>
+                    <li><strong>AND</strong>: 只有在磁盘空间不足且文件过旧的情况下才删除</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadConfigs();
+});
+
+function loadConfigs() {
+    fetch('/AutoDelete/GetConfigs')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayConfigs(data.configs);
+                displayDrives(data.drives);
+            } else {
+                document.getElementById('configList').innerHTML = '<p class="text-danger">加载失败: ' + data.message + '</p>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('configList').innerHTML = '<p class="text-danger">网络错误: ' + error.message + '</p>';
+        });
+}
+
+function displayConfigs(configs) {
+    let html = '';
+    if (configs.length === 0) {
+        html = '<p class="text-muted">暂无配置</p>';
+    } else {
+        configs.forEach(config => {
+            html += `
+                <div class="mb-3 p-3 border rounded">
+                    <h6><strong>${config.driveLetter}</strong></h6>
+                    <p><strong>删除目录:</strong> ${config.deleteDirectories.join(', ')}</p>
+                    <p><strong>容量阈值:</strong> ${config.startDeleteSizeGB}GB - ${config.stopDeleteSizeGB}GB</p>
+                    <p><strong>时间阈值:</strong> ${config.startDeleteFileDays}天</p>
+                    <p><strong>逻辑模式:</strong> ${config.logicModeDescription}</p>
+                </div>
+            `;
+        });
+    }
+    document.getElementById('configList').innerHTML = html;
+}
+
+function displayDrives(drives) {
+    let html = '';
+    drives.forEach(drive => {
+        const freePercentage = Math.round((drive.freeSpaceGB / (drive.totalSize / (1024*1024*1024))) * 100);
+        const statusClass = freePercentage < 10 ? 'text-danger' : freePercentage < 25 ? 'text-warning' : 'text-success';
+        
+        html += `
+            <div class="mb-3 p-3 border rounded">
+                <h6><strong>${drive.driveLetter}</strong></h6>
+                <p><strong>总容量:</strong> ${drive.totalSize}</p>
+                <p><strong>剩余空间:</strong> <span class="${statusClass}">${drive.freeSpace} (${drive.freeSpaceGB}GB)</span></p>
+                <div class="progress">
+                    <div class="progress-bar ${statusClass.replace('text-', 'bg-')}" style="width: ${100-freePercentage}%"></div>
+                </div>
+            </div>
+        `;
+    });
+    document.getElementById('driveList').innerHTML = html;
+}
+
+function testDeleteCondition() {
+    const data = {
+        driveLetter: document.getElementById('testDrive').value,
+        filePath: document.getElementById('testFilePath').value,
+        startDeleteSizeGB: parseFloat(document.getElementById('testSizeGB').value),
+        startDeleteFileDays: parseInt(document.getElementById('testDays').value),
+        logicMode: document.getElementById('testLogic').value
+    };
+
+    if (!data.filePath) {
+        showTestResult('请输入文件路径', 'warning');
+        return;
+    }
+
+    fetch('/AutoDelete/TestDeleteCondition', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            const alertType = result.shouldDelete ? 'danger' : 'success';
+            const content = `
+                <h6>测试结果: ${result.shouldDelete ? '会删除' : '不会删除'}</h6>
+                <p><strong>当前磁盘剩余空间:</strong> ${result.currentFreeSpaceGB}GB</p>
+                <p><strong>文件年龄:</strong> ${result.fileAge}天</p>
+                <p><strong>条件判断:</strong> ${result.explanation}</p>
+            `;
+            showTestResult(content, alertType);
+        } else {
+            showTestResult('测试失败: ' + result.message, 'warning');
+        }
+    })
+    .catch(error => {
+        showTestResult('网络错误: ' + error.message, 'danger');
+    });
+}
+
+function showTestResult(content, type) {
+    const resultDiv = document.getElementById('testResult');
+    const alertDiv = document.getElementById('testResultAlert');
+    const contentDiv = document.getElementById('testResultContent');
+    
+    alertDiv.className = `alert alert-${type}`;
+    contentDiv.innerHTML = content;
+    resultDiv.style.display = 'block';
+}
+</script>
+
+<style>
+.card {
+    margin-bottom: 20px;
+}
+
+.progress {
+    height: 10px;
+}
+
+.form-control {
+    margin-bottom: 10px;
+}
+
+#testResult {
+    max-height: 200px;
+    overflow-y: auto;
+}
+</style>

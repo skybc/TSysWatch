@@ -20,15 +20,13 @@ internal partial class Program
         var builder = WebApplication.CreateBuilder(args).Inject();
         builder.Services.AddControllersWithViews().AddInject();
         var app = builder.Build().UseDefaultServiceProvider();
+        // 重定位
+        app.UseHttpsRedirection();
         app.UseStaticFiles();
         app.UseAuthorization();
         app.UseInject();
         app.MapDefaultControllerRoute();
         app.MapControllers();
         app.Run();
-    }
-
-
-
-
+    } 
 }

@@ -20,7 +20,7 @@ namespace TSysWatch
         public static List<DiskCleanupConfig> GetCurrentConfigs()
         {
             var configs = new List<DiskCleanupConfig>();
-            
+
             try
             {
                 if (!File.Exists(ConfigFilePath))
@@ -71,6 +71,14 @@ namespace TSysWatch
                                     if (double.TryParse(value, out double stopSize))
                                         currentConfig.StopDeleteSizeGB = stopSize;
                                     break;
+                                case "startdeletefiledays":
+                                    if (int.TryParse(value, out int fileDays))
+                                        currentConfig.StartDeleteFileDays = fileDays;
+                                    break;
+                                case "logicmode":
+                                    if (Enum.TryParse<DeleteLogicMode>(value, true, out DeleteLogicMode mode))
+                                        currentConfig.LogicMode = mode;
+                                    break;
                             }
                         }
                     }
@@ -103,6 +111,8 @@ namespace TSysWatch
                 sb.AppendLine("# DeleteDirectories=目录1,目录2,目录3");
                 sb.AppendLine("# StartDeleteSizeGB=开始删除时的磁盘剩余空间(GB)");
                 sb.AppendLine("# StopDeleteSizeGB=停止删除时的磁盘剩余空间(GB)");
+                sb.AppendLine("# StartDeleteFileDays=开始删除文件时间(天) - 只删除超过N天的文件，0表示不限制时间");
+                sb.AppendLine("# LogicMode=删除条件逻辑关系 - AND(且)/OR(或)，AND表示同时满足容量和时间条件，OR表示满足任一条件");
                 sb.AppendLine();
 
                 foreach (var config in configs)
@@ -111,6 +121,8 @@ namespace TSysWatch
                     sb.AppendLine($"DeleteDirectories={string.Join(",", config.DeleteDirectories)}");
                     sb.AppendLine($"StartDeleteSizeGB={config.StartDeleteSizeGB}");
                     sb.AppendLine($"StopDeleteSizeGB={config.StopDeleteSizeGB}");
+                    sb.AppendLine($"StartDeleteFileDays={config.StartDeleteFileDays}");
+                    sb.AppendLine($"LogicMode={config.LogicMode}");
                     sb.AppendLine();
                 }
 
@@ -130,16 +142,20 @@ namespace TSysWatch
         /// <param name="deleteDirectories">删除目录列表</param>
         /// <param name="startDeleteSizeGB">开始删除大小(GB)</param>
         /// <param name="stopDeleteSizeGB">停止删除大小(GB)</param>
-        public static void AddOrUpdateConfig(string driveLetter, List<string> deleteDirectories, double startDeleteSizeGB, double stopDeleteSizeGB)
+        /// <param name="startDeleteFileDays">开始删除文件时间(天)</param>
+        /// <param name="logicMode">删除条件逻辑关系</param>
+        public static void AddOrUpdateConfig(string driveLetter, List<string> deleteDirectories, double startDeleteSizeGB, double stopDeleteSizeGB, int startDeleteFileDays = 0, DeleteLogicMode logicMode = DeleteLogicMode.OR)
         {
             var configs = GetCurrentConfigs();
             var existingConfig = configs.FirstOrDefault(c => c.DriveLetter.Equals(driveLetter, StringComparison.OrdinalIgnoreCase));
-            
+
             if (existingConfig != null)
             {
                 existingConfig.DeleteDirectories = deleteDirectories;
                 existingConfig.StartDeleteSizeGB = startDeleteSizeGB;
                 existingConfig.StopDeleteSizeGB = stopDeleteSizeGB;
+                existingConfig.StartDeleteFileDays = startDeleteFileDays;
+                existingConfig.LogicMode = logicMode;
             }
             else
             {
@@ -148,7 +164,9 @@ namespace TSysWatch
                     DriveLetter = driveLetter,
                     DeleteDirectories = deleteDirectories,
                     StartDeleteSizeGB = startDeleteSizeGB,
-                    StopDeleteSizeGB = stopDeleteSizeGB
+                    StopDeleteSizeGB = stopDeleteSizeGB,
+                    StartDeleteFileDays = startDeleteFileDays,
+                    LogicMode = logicMode
                 });
             }
 
@@ -185,7 +203,7 @@ namespace TSysWatch
         public static Dictionary<string, bool> CheckDirectoriesExist(List<string> directories)
         {
             var result = new Dictionary<string, bool>();
-            
+
             foreach (var directory in directories)
             {
                 result[directory] = Directory.Exists(directory);
@@ -235,6 +253,120 @@ namespace TSysWatch
                 max /= scale;
             }
             return "0 Bytes";
+        }
+
+        /// <summary>
+        /// 检查文件是否满足时间条件（文件超过指定天数）
+        /// </summary>
+        /// <param name="filePath">文件路径</param>
+        /// <param name="days">天数阈值</param>
+        /// <returns>是否满足时间条件</returns>
+        public static bool IsFileOlderThanDays(FileInfo fileInfo, int days)
+        {
+            if (days <= 0)
+            {
+                return true; // 0天表示不限制时间，总是返回true
+            }
+
+            try
+            {
+
+                // 取文件的最后修改时间
+                var fileTime = fileInfo.LastWriteTime;
+                var threshold = DateTime.Now.AddDays(-days);
+                return fileTime < threshold;
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Logger.Error($"检查文件时间异常：{fileInfo.FullName}，错误：{ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 检查是否应该删除文件（根据配置的逻辑关系判断）
+        /// </summary>
+        /// <param name="config">磁盘清理配置</param>
+        /// <param name="currentFreeSpaceGB">当前磁盘剩余空间(GB)</param>
+        /// <param name="filePath">文件路径</param>
+        /// <returns>是否应该删除文件</returns>
+        public static DeleteReason ShouldDeleteFile(DiskCleanupConfig config, double currentFreeSpaceGB, FileInfo fileInfo)
+        {
+            // 检查容量条件
+            bool capacityCondition = currentFreeSpaceGB < config.StartDeleteSizeGB;
+
+            // 检查时间条件
+            bool timeCondition = IsFileOlderThanDays(fileInfo, config.StartDeleteFileDays);
+
+            // 根据逻辑关系返回结果
+            switch (config.LogicMode)
+            {
+                case DeleteLogicMode.AND:
+                    // 且：必须同时满足容量和时间条件
+                    return new DeleteReason
+                    {
+                        CanDelete = capacityCondition && timeCondition,
+                        Reason = "同时满足容量和时间条件",
+                        FileInfo = fileInfo
+                    };
+                case DeleteLogicMode.OR:
+                    // 或：满足容量或时间条件之一即可
+                    if (capacityCondition)
+                    {
+                        return new DeleteReason()
+                        {
+                            CanDelete = true,
+                            Reason = "容量不足",
+                            FileInfo = fileInfo
+                        };
+                    }
+                    if (timeCondition)
+                    {
+                        return new DeleteReason()
+                        {
+                            CanDelete = true,
+                            Reason = "文件过期",
+                            FileInfo = fileInfo
+                        };
+                    }
+                    else
+                    {
+                        return new DeleteReason()
+                        {
+                            CanDelete = false,
+                            Reason = "不满足删除条件",
+                            FileInfo = fileInfo
+                        };
+                    }
+                default:
+                    if (capacityCondition)
+                    {
+                        return new DeleteReason()
+                        {
+                            CanDelete = true,
+                            Reason = "容量不足",
+                            FileInfo = fileInfo
+                        };
+                    }
+                    if (timeCondition)
+                    {
+                        return new DeleteReason()
+                        {
+                            CanDelete = true,
+                            Reason = "文件过期",
+                            FileInfo = fileInfo
+                        };
+                    }
+                    else
+                    {
+                        return new DeleteReason()
+                        {
+                            CanDelete = false,
+                            Reason = "不满足删除条件",
+                            FileInfo = fileInfo
+                        };
+                    }
+            }
         }
     }
 }

@@ -3,21 +3,29 @@
 # DeleteDirectories=目录1,目录2,目录3
 # StartDeleteSizeGB=开始删除时的磁盘剩余空间(GB)
 # StopDeleteSizeGB=停止删除时的磁盘剩余空间(GB)
+# StartDeleteFileDays=开始删除文件时间(天) - 只删除超过N天的文件，0表示不限制时间
+# LogicMode=删除条件逻辑关系 - AND(且)/OR(或)，AND表示同时满足容量和时间条件，OR表示满足任一条件
 
-# C盘配置
+# C盘配置 - 使用OR逻辑：空间不足或文件超过30天就删除
 [C:]
 DeleteDirectories=C:\temp,C:\Windows\temp,C:\Users\Public\temp
 StartDeleteSizeGB=5.0
 StopDeleteSizeGB=10.0
+StartDeleteFileDays=30
+LogicMode=OR
 
-# D盘配置
+# D盘配置 - 使用AND逻辑：必须同时满足空间不足且文件超过7天才删除
 [D:]
 DeleteDirectories=D:\temp,D:\logs,D:\cache
 StartDeleteSizeGB=10.0
 StopDeleteSizeGB=20.0
+StartDeleteFileDays=7
+LogicMode=AND
 
-# E盘配置
+# E盘配置 - 仅基于时间删除：只删除超过90天的文件，不考虑磁盘空间
 [E:]
 DeleteDirectories=E:\temp,E:\backup\old
-StartDeleteSizeGB=15.0
-StopDeleteSizeGB=25.0
+StartDeleteSizeGB=0.0
+StopDeleteSizeGB=0.0
+StartDeleteFileDays=90
+LogicMode=OR

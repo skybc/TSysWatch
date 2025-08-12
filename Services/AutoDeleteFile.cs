@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using System.Threading;
+using Dm.util;
 
 namespace TSysWatch
 {
@@ -31,7 +32,7 @@ namespace TSysWatch
                 {
                     // 读取配置文件
                     ReadIniFile();
-                    
+
                     // 检查每个磁盘配置
                     foreach (var config in _configs)
                     {
@@ -106,6 +107,14 @@ namespace TSysWatch
                                     if (double.TryParse(value, out double stopSize))
                                         currentConfig.StopDeleteSizeGB = stopSize;
                                     break;
+                                case "startdeletefiledays":
+                                    if (int.TryParse(value, out int fileDays))
+                                        currentConfig.StartDeleteFileDays = fileDays;
+                                    break;
+                                case "logicmode":
+                                    if (Enum.TryParse<DeleteLogicMode>(value, true, out DeleteLogicMode mode))
+                                        currentConfig.LogicMode = mode;
+                                    break;
                             }
                         }
                     }
@@ -137,16 +146,22 @@ namespace TSysWatch
 # DeleteDirectories=目录1,目录2,目录3
 # StartDeleteSizeGB=开始删除时的磁盘剩余空间(GB)
 # StopDeleteSizeGB=停止删除时的磁盘剩余空间(GB)
+# StartDeleteFileDays=开始删除文件时间(天) - 只删除超过N天的文件，0表示不限制时间
+# LogicMode=删除条件逻辑关系 - AND(且)/OR(或)，AND表示同时满足容量和时间条件，OR表示满足任一条件
 
 [C:]
 DeleteDirectories=C:\temp,C:\logs,C:\cache
 StartDeleteSizeGB=5.0
 StopDeleteSizeGB=10.0
+StartDeleteFileDays=30
+LogicMode=OR
 
 [D:]
 DeleteDirectories=D:\temp,D:\logs
 StartDeleteSizeGB=10.0
 StopDeleteSizeGB=20.0
+StartDeleteFileDays=7
+LogicMode=AND
 ";
 
                 File.WriteAllText(ConfigFilePath, defaultConfig, Encoding.UTF8);
@@ -180,50 +195,67 @@ StopDeleteSizeGB=20.0
                 }
 
                 double freeSpaceGB = driveInfo.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
-                
-                LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 剩余空间：{freeSpaceGB:F2}GB");
 
-                // 检查是否需要开始清理
-                if (freeSpaceGB <= config.StartDeleteSizeGB)
+                LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 剩余空间：{freeSpaceGB:F2}GB，配置：容量阈值{config.StartDeleteSizeGB}GB，时间阈值{config.StartDeleteFileDays}天，逻辑模式{config.LogicMode}");
+
+                // 获取所有候选删除文件
+                var candidateFiles = GetFilesToDelete(config);
+
+                // 筛选需要删除的文件（根据新的逻辑条件）
+                List<DeleteReason> filesToDelete = candidateFiles.Select(file =>
+                  AutoDeleteFileManager.ShouldDeleteFile(config, freeSpaceGB, file)
+              ).Where(r => r.CanDelete).ToList();
+
+                if (filesToDelete.Count == 0)
                 {
-                    LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 剩余空间不足，开始清理文件");
-                    
-                    // 获取所有要删除的文件
-                    var filesToDelete = GetFilesToDelete(config);
-                    
-                    // 按时间排序（最旧的文件先删除）
-                    var sortedFiles = filesToDelete.OrderBy(f => f.LastWriteTime).ToList();
-                    
-                    foreach (var file in sortedFiles)
+                    LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 没有符合删除条件的文件");
+                    return;
+                }
+
+                // 如果容量条件满足，按时间排序（最旧的文件先删除）
+                var sortedFiles = filesToDelete.OrderBy(f => f.FileInfo.LastWriteTime).ToList();
+
+                LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 开始清理，共找到 {sortedFiles.Count} 个符合删除条件的文件");
+                int deletedCount = 0;
+                long totalDeletedSize = 0;
+
+                foreach (var file in sortedFiles)
+                {
+                    try
                     {
-                        try
+                        // 如果是容量驱动的删除，需要实时检查磁盘空间
+                        if (config.LogicMode == DeleteLogicMode.OR || freeSpaceGB < config.StartDeleteSizeGB)
                         {
                             // 再次检查磁盘空间
                             driveInfo = new DriveInfo(config.DriveLetter);
                             freeSpaceGB = driveInfo.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
-                            
-                            if (freeSpaceGB >= config.StopDeleteSizeGB)
+
+                            // 如果空间已经足够且是容量驱动模式，停止删除
+                            if (freeSpaceGB >= config.StopDeleteSizeGB &&
+                                (config.LogicMode == DeleteLogicMode.OR && config.StartDeleteFileDays == 0))
                             {
                                 LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 空间已恢复到 {freeSpaceGB:F2}GB，停止清理");
                                 break;
                             }
-                            
-                            // 删除文件
-                            long fileSize = file.Length;
-                            File.Delete(file.FullName);
-                            LogHelper.Logger.Information($"删除文件：{file.FullName}，大小：{fileSize / (1024.0 * 1024.0):F2}MB");
                         }
-                        catch (Exception ex)
-                        {
-                            LogHelper.Logger.Error($"删除文件失败：{file.FullName}，错误：{ex.Message}");
-                        }
+
+                        // 删除文件
+                        long fileSize = file.FileInfo.Length;
+                        var fileAge = DateTime.Now - (file.FileInfo.CreationTime > file.FileInfo.LastWriteTime ? file.FileInfo.CreationTime : file.FileInfo.LastWriteTime);
+                        // 打印
+
+                        File.Delete(file.FileInfo.FullName);
+                        deletedCount++;
+                        totalDeletedSize += fileSize;
+                        LogHelper.Logger.Information($"删除文件：{file.FileInfo.FullName}，原因：{file.Reason}，大小：{fileSize / (1024.0 * 1024.0):F2}MB，文件年龄：{fileAge.Days}天");
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Logger.Error($"删除文件失败：{file.FileInfo.FullName}，错误：{ex.Message}");
                     }
                 }
-                else
-                {
-                    // 空间充足，无需清理
-                    LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 空间充足，无需清理");
-                }
+
+                LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 清理完成，删除了 {deletedCount} 个文件，总大小：{totalDeletedSize / (1024.0 * 1024.0):F2}MB");
             }
             catch (Exception ex)
             {
@@ -239,7 +271,7 @@ StopDeleteSizeGB=20.0
         private static List<FileInfo> GetFilesToDelete(DiskCleanupConfig config)
         {
             var files = new List<FileInfo>();
-            
+
             foreach (var directory in config.DeleteDirectories)
             {
                 try
@@ -258,11 +290,11 @@ StopDeleteSizeGB=20.0
                     }
 
                     var directoryInfo = new DirectoryInfo(directory);
-                    
+
                     // 递归获取所有文件（包括子目录）
                     var directoryFiles = directoryInfo.GetFiles("*", SearchOption.AllDirectories);
                     files.AddRange(directoryFiles);
-                    
+
                     LogHelper.Logger.Information($"目录 {directory} 找到 {directoryFiles.Length} 个文件");
                 }
                 catch (Exception ex)
@@ -270,7 +302,7 @@ StopDeleteSizeGB=20.0
                     LogHelper.Logger.Error($"获取目录文件失败：{directory}，错误：{ex.Message}");
                 }
             }
-            
+
             return files;
         }
 
