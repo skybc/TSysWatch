@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using TSysWatch;
 
 namespace TSysWatch.Controllers
@@ -16,10 +16,10 @@ namespace TSysWatch.Controllers
         {
             var configs = AutoDeleteFileManager.GetCurrentConfigs();
             var drives = AutoDeleteFileManager.GetDriveInfos();
-            
+
             ViewBag.Drives = drives;
             ViewBag.Configs = configs;
-            
+
             return View(configs);
         }
 
@@ -34,7 +34,7 @@ namespace TSysWatch.Controllers
             {
                 var configs = AutoDeleteFileManager.GetCurrentConfigs();
                 var drives = AutoDeleteFileManager.GetDriveInfos();
-                
+
                 var result = configs.Select(config => new
                 {
                     DriveLetter = config.DriveLetter,
@@ -93,11 +93,12 @@ namespace TSysWatch.Controllers
                 };
                 // 
                 FileInfo fileInfo = new FileInfo(request.FilePath);
-                bool shouldDelete = AutoDeleteFileManager.ShouldDeleteFile(config, currentFreeSpaceGB, fileInfo);
-                
+                var deleteReason = AutoDeleteFileManager.ShouldDeleteFile(config, currentFreeSpaceGB, fileInfo);
+                var shouldDelete = deleteReason.CanDelete;
+
                 // var fileInfo = new FileInfo(request.FilePath);
                 var fileAge = DateTime.Now - (fileInfo.CreationTime > fileInfo.LastWriteTime ? fileInfo.CreationTime : fileInfo.LastWriteTime);
-                
+
                 // 检查各个条件
                 bool capacityCondition = currentFreeSpaceGB < request.StartDeleteSizeGB;
                 bool timeCondition = AutoDeleteFileManager.IsFileOlderThanDays(fileInfo, request.StartDeleteFileDays);
@@ -133,7 +134,7 @@ namespace TSysWatch.Controllers
         private string GetDeleteExplanation(bool capacityCondition, bool timeCondition, DeleteLogicMode logicMode, bool result)
         {
             string explanation = $"容量条件：{(capacityCondition ? "满足" : "不满足")}，时间条件：{(timeCondition ? "满足" : "不满足")}。";
-            
+
             if (logicMode == DeleteLogicMode.AND)
             {
                 explanation += $" 使用AND逻辑，需同时满足两个条件，结果：{(result ? "删除" : "不删除")}";
@@ -142,7 +143,7 @@ namespace TSysWatch.Controllers
             {
                 explanation += $" 使用OR逻辑，满足任一条件即可，结果：{(result ? "删除" : "不删除")}";
             }
-            
+
             return explanation;
         }
     }

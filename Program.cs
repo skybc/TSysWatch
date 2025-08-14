@@ -18,10 +18,11 @@ internal partial class Program
         AutoMoveFile.Start();
         Task.Run(monitorWindow.RunMonitor);
         var builder = WebApplication.CreateBuilder(args).Inject();
-        builder.Services.AddControllersWithViews().AddInject();
+        builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation().AddInject();
+
         var app = builder.Build().UseDefaultServiceProvider();
         // 重定位
-        app.UseHttpsRedirection();
+        //app.();
         app.UseStaticFiles();
         app.UseAuthorization();
         app.UseInject();

@@ -23,6 +23,18 @@ namespace TSysWatch
             Task.Run(Run);
         }
 
+        /// <summary>
+        /// 是否正在运行
+        /// </summary>
+        /// <returns></returns>
+        public static bool IsRunning()
+        {
+            return _isRunning;
+        }
+
+        /// <summary>
+        /// 运行中
+        /// </summary>
         private static void Run()
         {
             _isRunning = true;
@@ -32,7 +44,6 @@ namespace TSysWatch
                 {
                     // 读取配置文件
                     ReadIniFile();
-
                     // 检查每个磁盘配置
                     foreach (var config in _configs)
                     {
@@ -204,7 +215,7 @@ LogicMode=AND
                 // 筛选需要删除的文件（根据新的逻辑条件）
                 List<DeleteReason> filesToDelete = candidateFiles.Select(file =>
                   AutoDeleteFileManager.ShouldDeleteFile(config, freeSpaceGB, file)
-              ).Where(r => r.CanDelete).ToList();
+                ).Where(r => r.CanDelete).ToList();
 
                 if (filesToDelete.Count == 0)
                 {
@@ -247,7 +258,11 @@ LogicMode=AND
                         File.Delete(file.FileInfo.FullName);
                         deletedCount++;
                         totalDeletedSize += fileSize;
+                        // 删除文件单独日志，每天一个，放到：当前应用目录+/record/auto_delete/yyyy/MM/yyyyMMdd.txt里面
                         LogHelper.Logger.Information($"删除文件：{file.FileInfo.FullName}，原因：{file.Reason}，大小：{fileSize / (1024.0 * 1024.0):F2}MB，文件年龄：{fileAge.Days}天");
+                        var logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot/record/auto_delete", file.FileInfo.LastWriteTime.ToString("yyyy/MM"), $"{file.FileInfo.LastWriteTime:yyyyMMdd}.txt");
+                        Directory.CreateDirectory(Path.GetDirectoryName(logFilePath));
+                        File.AppendAllText(logFilePath, $"删除文件：{file.FileInfo.FullName}，原因：{file.Reason}，大小：{fileSize / (1024.0 * 1024.0):F2}MB，文件年龄：{fileAge.Days}天{Environment.NewLine}");
                     }
                     catch (Exception ex)
                     {
@@ -302,7 +317,6 @@ LogicMode=AND
                     LogHelper.Logger.Error($"获取目录文件失败：{directory}，错误：{ex.Message}");
                 }
             }
-
             return files;
         }
 

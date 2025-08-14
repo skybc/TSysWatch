@@ -1,24 +1,33 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@ViewData["Title"] - TSysWatch</title>
-    <link rel="stylesheet" href="/style.css" />
+    <link href="/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css" />
 </head>
-<body>
-    <header>
-        <h2>TSysWatch 系统监控</h2>
-        <nav>
-            <a href="/">首页</a>
-            <a href="/Home/Index">MVC首页</a>
-        </nav>
-    </header>
-    <main>
+
+<body class="d-flex flex-column min-vh-100">
+    <!-- 顶部导航栏 -->
+    @await Html.PartialAsync("_TopNav")
+    <!-- 内容区，顶部留出空间 -->
+    <!-- 内容区，顶部留出空间避免被fixed-top遮挡，pt-5约等于3rem，可根据实际navbar高度调整 -->
+    <main class="flex-fill container  " style="padding-top:4rem; padding-bottom:70px;">
         @RenderBody()
     </main>
-    <footer>
-        <hr />
-        <p>&copy; 2025 TSysWatch</p>
+    <!-- 页脚 -->
+    <footer class="bg-light text-center text-muted py-3 border-top fixed-bottom">
+        <div class="container">
+            <small>&copy; 2025 TSysWatch | 由 ASP.NET MVC + Bootstrap 构建</small>
+        </div>
     </footer>
+
+    <!-- jQuery 和 Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="/bootstrap/bootstrap.bundle.min.js"></script>
+    
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
