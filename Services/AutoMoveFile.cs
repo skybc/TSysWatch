@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -18,11 +18,18 @@ namespace TSysWatch
         /// 移动根目录（源目录）
         /// </summary>
         public string SourceDirectory { get; set; } = "";
-        
+
         /// <summary>
         /// 目标目录
         /// </summary>
         public string TargetDirectory { get; set; } = "";
+
+        /// <summary>
+        /// 移动时间限制（分钟）
+        /// 如果文件最后修改时间与当前时间的差值在此限制范围内，则跳过移动
+        /// 默认值为0，表示不启用时间限制
+        /// </summary>
+        public int MoveTimeLimitMinutes { get; set; } = 0;
     }
 
     public class AutoMoveFile
@@ -121,6 +128,16 @@ namespace TSysWatch
                                 case "targetdirectory":
                                     currentConfig.TargetDirectory = value;
                                     break;
+                                case "movetimelimitminutes":
+                                    if (int.TryParse(value, out int limitMinutes))
+                                    {
+                                        currentConfig.MoveTimeLimitMinutes = limitMinutes;
+                                    }
+                                    else
+                                    {
+                                        LogHelper.Logger.Warning($"无效的移动时间限制配置值：{value}，使用默认值0");
+                                    }
+                                    break;
                             }
                         }
                     }
@@ -155,11 +172,15 @@ namespace TSysWatch
 SourceDirectory=D:\MoveSource
 # 目标目录 - 移动到的目标目录
 TargetDirectory=E:\MoveTarget
+# 移动时间限制（分钟）- 如果文件最后修改时间与当前时间差值在此限制内则跳过移动
+# 设置为0表示不启用时间限制，所有文件都会被移动
+MoveTimeLimitMinutes=0
 
 # 可以添加更多移动任务
 #[MoveTask]
 #SourceDirectory=C:\TempFiles
 #TargetDirectory=D:\Archive
+#MoveTimeLimitMinutes=60
 ";
 
                 File.WriteAllText(ConfigFilePath, defaultContent, Encoding.UTF8);
@@ -206,15 +227,21 @@ TargetDirectory=E:\MoveTarget
                 var filesToMove = GetFilesToMove(config.SourceDirectory);
 
                 int movedCount = 0;
+                int skippedCount = 0;
                 foreach (var file in filesToMove)
                 {
-                    if (MoveFile(file, config.SourceDirectory, config.TargetDirectory, recordPath))
+                    var result = MoveFile(file, config.SourceDirectory, config.TargetDirectory, recordPath, config);
+                    if (result.moved)
                     {
                         movedCount++;
                     }
+                    else if (result.skipped)
+                    {
+                        skippedCount++;
+                    }
                 }
 
-                LogHelper.Logger.Information($"移动任务完成，从 {config.SourceDirectory} 到 {config.TargetDirectory}，共移动 {movedCount} 个文件");
+                LogHelper.Logger.Information($"移动任务完成，从 {config.SourceDirectory} 到 {config.TargetDirectory}，共移动 {movedCount} 个文件，跳过 {skippedCount} 个文件");
             }
             catch (Exception ex)
             {
@@ -234,7 +261,7 @@ TargetDirectory=E:\MoveTarget
             try
             {
                 var allFiles = Directory.GetFiles(directory, "*", SearchOption.AllDirectories);
-                
+
                 foreach (var file in allFiles)
                 {
                     var fileName = Path.GetFileName(file);
@@ -287,7 +314,7 @@ TargetDirectory=E:\MoveTarget
         /// <param name="targetFile">目标文件路径</param>
         /// <param name="fileSize">文件大小</param>
         /// <param name="status">操作状态</param>
-        private static void WriteMoveRecord(string recordPath, string operation, string sourceFile, string targetFile,  string status)
+        private static void WriteMoveRecord(string recordPath, string operation, string sourceFile, string targetFile, string status)
         {
             try
             {
@@ -301,22 +328,84 @@ TargetDirectory=E:\MoveTarget
         }
 
         /// <summary>
+        /// 检查文件是否在移动时间限制范围内
+        /// </summary>
+        /// <param name="filePath">文件路径</param>
+        /// <param name="timeLimitMinutes">时间限制（分钟）</param>
+        /// <returns>如果文件在时间限制范围内返回true，否则返回false</returns>
+        private static bool IsFileWithinTimeLimit(string filePath, int timeLimitMinutes)
+        {
+            try
+            {
+                // 如果时间限制为0或负数，表示不启用时间限制
+                if (timeLimitMinutes <= 0)
+                {
+                    return false;
+                }
+
+                var fileInfo = new FileInfo(filePath);
+                var lastWriteTime = fileInfo.LastWriteTime;
+                var currentTime = DateTime.Now;
+                var timeDifference = currentTime - lastWriteTime; 
+                // 如果时间差小于等于限制时间，则在时间限制范围内
+                return timeDifference.TotalMinutes <= timeLimitMinutes;
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Logger.Error($"检查文件时间限制异常 {filePath}：{ex.Message}", ex);
+                return false; // 异常情况下不限制移动
+            }
+        }
+
+        /// <summary>
+        /// 文件移动结果
+        /// </summary>
+        public struct MoveResult
+        {
+            public bool moved;
+            public bool skipped;
+            public string reason;
+
+            public MoveResult(bool moved, bool skipped, string reason = "")
+            {
+                this.moved = moved;
+                this.skipped = skipped;
+                this.reason = reason;
+            }
+        }
+
+        /// <summary>
         /// 移动单个文件
         /// </summary>
         /// <param name="sourceFile">源文件路径</param>
         /// <param name="sourceRoot">源根目录</param>
         /// <param name="targetRoot">目标根目录</param>
         /// <param name="recordPath">记录文件路径</param>
-        /// <returns>是否移动成功</returns>
-        private static bool MoveFile(string sourceFile, string sourceRoot, string targetRoot, string recordPath)
+        /// <param name="config">移动配置</param>
+        /// <returns>移动结果</returns>
+        private static MoveResult MoveFile(string sourceFile, string sourceRoot, string targetRoot, string recordPath, AutoMoveConfig config)
         {
             try
             {
+                // 检查文件是否在时间限制范围内
+                if (IsFileWithinTimeLimit(sourceFile, config.MoveTimeLimitMinutes))
+                {
+                    var fileInfo = new FileInfo(sourceFile);
+                    var timeDifference = DateTime.Now - fileInfo.LastWriteTime;
+                    var skippedReason = $"文件在时间限制范围内（最后修改时间：{fileInfo.LastWriteTime:yyyy-MM-dd HH:mm:ss}，距离现在：{timeDifference.TotalMinutes:F1}分钟）";
+                    
+                    LogHelper.Logger.Information($"跳过移动文件：{Path.GetRelativePath(sourceRoot, sourceFile)} - {skippedReason}");
+                    
+                    // 记录跳过操作
+                    WriteMoveRecord(recordPath, "跳过", sourceFile, "N/A", skippedReason);
+                    
+                    return new MoveResult(false, true, skippedReason);
+                }
+
                 // 计算相对路径，保持目录结构
                 var relativePath = Path.GetRelativePath(sourceRoot, sourceFile);
                 var targetFile = Path.Combine(targetRoot, relativePath);
                 var targetDir = Path.GetDirectoryName(targetFile);
-                var fileInfo = new FileInfo(sourceFile);
 
                 // 确保目标目录存在
                 if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
@@ -333,25 +422,24 @@ TargetDirectory=E:\MoveTarget
                 // 执行移动
                 File.Move(sourceFile, targetFile);
                 LogHelper.Logger.Information($"移动文件：{relativePath}");
-                
+
                 // 记录移动操作
                 WriteMoveRecord(recordPath, "移动", sourceFile, targetFile, "成功");
 
-                return true;
+                return new MoveResult(true, false, "移动成功");
             }
             catch (Exception ex)
             {
                 LogHelper.Logger.Error($"移动文件异常 {sourceFile}：{ex.Message}", ex);
-                
+
                 // 记录失败操作
                 try
                 {
-                    var fileInfo = new FileInfo(sourceFile);
                     WriteMoveRecord(recordPath, "移动", sourceFile, "失败", ex.Message);
                 }
                 catch { }
-                
-                return false;
+
+                return new MoveResult(false, false, ex.Message);
             }
         }
 
@@ -368,7 +456,7 @@ TargetDirectory=E:\MoveTarget
 
             int counter = 1;
             string newFilePath;
-            
+
             do
             {
                 var newFileName = $"{fileNameWithoutExtension}({counter}){extension}";

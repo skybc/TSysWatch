@@ -1,22 +1,23 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using static TSysWatch.AutoDeleteFile;
 
 namespace TSysWatch
 {
     /// <summary>
-    /// ×Ô¶¯É¾³ıÎÄ¼ş¹ÜÀí¹¤¾ß
+    /// è‡ªåŠ¨åˆ é™¤æ–‡ä»¶ç®¡ç†å·¥å…·
     /// </summary>
     public static class AutoDeleteFileManager
     {
         private static readonly string ConfigFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoDeleteFile.ini");
 
         /// <summary>
-        /// »ñÈ¡µ±Ç°ÅäÖÃ
+        /// è·å–å½“å‰é…ç½®
         /// </summary>
-        /// <returns>ÅäÖÃÁĞ±í</returns>
+        /// <returns>é…ç½®åˆ—è¡¨</returns>
         public static List<DiskCleanupConfig> GetCurrentConfigs()
         {
             var configs = new List<DiskCleanupConfig>();
@@ -25,7 +26,7 @@ namespace TSysWatch
             {
                 if (!File.Exists(ConfigFilePath))
                 {
-                    LogHelper.Logger.Warning("ÅäÖÃÎÄ¼ş²»´æÔÚ");
+                    LogHelper.Logger.Warning("é…ç½®æ–‡ä»¶ä¸å­˜åœ¨");
                     return configs;
                 }
 
@@ -91,28 +92,28 @@ namespace TSysWatch
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"»ñÈ¡ÅäÖÃÒì³££º{ex.Message}", ex);
+                LogHelper.Logger.Error($"è·å–é…ç½®å¼‚å¸¸ï¼š{ex.Message}", ex);
             }
 
             return configs;
         }
 
         /// <summary>
-        /// ±£´æÅäÖÃ
+        /// ä¿å­˜é…ç½®
         /// </summary>
-        /// <param name="configs">ÅäÖÃÁĞ±í</param>
+        /// <param name="configs">é…ç½®åˆ—è¡¨</param>
         public static void SaveConfigs(List<DiskCleanupConfig> configs)
         {
             try
             {
                 var sb = new StringBuilder();
-                sb.AppendLine("# ×Ô¶¯É¾³ıÎÄ¼şÅäÖÃ");
-                sb.AppendLine("# ¸ñÊ½£º[´ÅÅÌÇı¶¯Æ÷]");
-                sb.AppendLine("# DeleteDirectories=Ä¿Â¼1,Ä¿Â¼2,Ä¿Â¼3");
-                sb.AppendLine("# StartDeleteSizeGB=¿ªÊ¼É¾³ıÊ±µÄ´ÅÅÌÊ£Óà¿Õ¼ä(GB)");
-                sb.AppendLine("# StopDeleteSizeGB=Í£Ö¹É¾³ıÊ±µÄ´ÅÅÌÊ£Óà¿Õ¼ä(GB)");
-                sb.AppendLine("# StartDeleteFileDays=¿ªÊ¼É¾³ıÎÄ¼şÊ±¼ä(Ìì) - Ö»É¾³ı³¬¹ıNÌìµÄÎÄ¼ş£¬0±íÊ¾²»ÏŞÖÆÊ±¼ä");
-                sb.AppendLine("# LogicMode=É¾³ıÌõ¼şÂß¼­¹ØÏµ - AND(ÇÒ)/OR(»ò)£¬AND±íÊ¾Í¬Ê±Âú×ãÈİÁ¿ºÍÊ±¼äÌõ¼ş£¬OR±íÊ¾Âú×ãÈÎÒ»Ìõ¼ş");
+                sb.AppendLine("# è‡ªåŠ¨åˆ é™¤æ–‡ä»¶é…ç½®");
+                sb.AppendLine("# æ ¼å¼ï¼š[ç£ç›˜é©±åŠ¨å™¨]");
+                sb.AppendLine("# DeleteDirectories=ç›®å½•1,ç›®å½•2,ç›®å½•3");
+                sb.AppendLine("# StartDeleteSizeGB=å¼€å§‹åˆ é™¤æ—¶çš„ç£ç›˜å‰©ä½™ç©ºé—´(GB)");
+                sb.AppendLine("# StopDeleteSizeGB=åœæ­¢åˆ é™¤æ—¶çš„ç£ç›˜å‰©ä½™ç©ºé—´(GB)");
+                sb.AppendLine("# StartDeleteFileDays=å¼€å§‹åˆ é™¤æ–‡ä»¶æ—¶é—´(å¤©) - åªåˆ é™¤è¶…è¿‡Nå¤©çš„æ–‡ä»¶ï¼Œ0è¡¨ç¤ºä¸é™åˆ¶æ—¶é—´");
+                sb.AppendLine("# LogicMode=åˆ é™¤æ¡ä»¶é€»è¾‘å…³ç³» - AND(ä¸”)/OR(æˆ–)ï¼ŒANDè¡¨ç¤ºåŒæ—¶æ»¡è¶³å®¹é‡å’Œæ—¶é—´æ¡ä»¶ï¼ŒORè¡¨ç¤ºæ»¡è¶³ä»»ä¸€æ¡ä»¶");
                 sb.AppendLine();
 
                 foreach (var config in configs)
@@ -127,23 +128,23 @@ namespace TSysWatch
                 }
 
                 File.WriteAllText(ConfigFilePath, sb.ToString(), Encoding.UTF8);
-                LogHelper.Logger.Information("ÅäÖÃ±£´æ³É¹¦");
+                LogHelper.Logger.Information("é…ç½®ä¿å­˜æˆåŠŸ");
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"±£´æÅäÖÃÒì³££º{ex.Message}", ex);
+                LogHelper.Logger.Error($"ä¿å­˜é…ç½®å¼‚å¸¸ï¼š{ex.Message}", ex);
             }
         }
 
         /// <summary>
-        /// Ìí¼Ó»ò¸üĞÂ´ÅÅÌÅäÖÃ
+        /// æ·»åŠ æˆ–æ›´æ–°ç£ç›˜é…ç½®
         /// </summary>
-        /// <param name="driveLetter">Çı¶¯Æ÷×ÖÄ¸</param>
-        /// <param name="deleteDirectories">É¾³ıÄ¿Â¼ÁĞ±í</param>
-        /// <param name="startDeleteSizeGB">¿ªÊ¼É¾³ı´óĞ¡(GB)</param>
-        /// <param name="stopDeleteSizeGB">Í£Ö¹É¾³ı´óĞ¡(GB)</param>
-        /// <param name="startDeleteFileDays">¿ªÊ¼É¾³ıÎÄ¼şÊ±¼ä(Ìì)</param>
-        /// <param name="logicMode">É¾³ıÌõ¼şÂß¼­¹ØÏµ</param>
+        /// <param name="driveLetter">é©±åŠ¨å™¨å­—æ¯</param>
+        /// <param name="deleteDirectories">åˆ é™¤ç›®å½•åˆ—è¡¨</param>
+        /// <param name="startDeleteSizeGB">å¼€å§‹åˆ é™¤å¤§å°(GB)</param>
+        /// <param name="stopDeleteSizeGB">åœæ­¢åˆ é™¤å¤§å°(GB)</param>
+        /// <param name="startDeleteFileDays">å¼€å§‹åˆ é™¤æ–‡ä»¶æ—¶é—´(å¤©)</param>
+        /// <param name="logicMode">åˆ é™¤æ¡ä»¶é€»è¾‘å…³ç³»</param>
         public static void AddOrUpdateConfig(string driveLetter, List<string> deleteDirectories, double startDeleteSizeGB, double stopDeleteSizeGB, int startDeleteFileDays = 0, DeleteLogicMode logicMode = DeleteLogicMode.OR)
         {
             var configs = GetCurrentConfigs();
@@ -174,9 +175,9 @@ namespace TSysWatch
         }
 
         /// <summary>
-        /// É¾³ı´ÅÅÌÅäÖÃ
+        /// åˆ é™¤ç£ç›˜é…ç½®
         /// </summary>
-        /// <param name="driveLetter">Çı¶¯Æ÷×ÖÄ¸</param>
+        /// <param name="driveLetter">é©±åŠ¨å™¨å­—æ¯</param>
         public static void RemoveConfig(string driveLetter)
         {
             var configs = GetCurrentConfigs();
@@ -185,9 +186,9 @@ namespace TSysWatch
         }
 
         /// <summary>
-        /// »ñÈ¡´ÅÅÌĞÅÏ¢
+        /// è·å–ç£ç›˜ä¿¡æ¯
         /// </summary>
-        /// <returns>´ÅÅÌĞÅÏ¢ÁĞ±í</returns>
+        /// <returns>ç£ç›˜ä¿¡æ¯åˆ—è¡¨</returns>
         public static List<DriveInfo> GetDriveInfos()
         {
             return DriveInfo.GetDrives()
@@ -196,10 +197,10 @@ namespace TSysWatch
         }
 
         /// <summary>
-        /// ¼ì²éÄ¿Â¼ÊÇ·ñ´æÔÚ
+        /// æ£€æŸ¥ç›®å½•æ˜¯å¦å­˜åœ¨
         /// </summary>
-        /// <param name="directories">Ä¿Â¼ÁĞ±í</param>
-        /// <returns>¼ì²é½á¹û</returns>
+        /// <param name="directories">ç›®å½•åˆ—è¡¨</param>
+        /// <returns>æ£€æŸ¥ç»“æœ</returns>
         public static Dictionary<string, bool> CheckDirectoriesExist(List<string> directories)
         {
             var result = new Dictionary<string, bool>();
@@ -213,10 +214,10 @@ namespace TSysWatch
         }
 
         /// <summary>
-        /// »ñÈ¡Ä¿Â¼´óĞ¡
+        /// è·å–ç›®å½•å¤§å°
         /// </summary>
-        /// <param name="directoryPath">Ä¿Â¼Â·¾¶</param>
-        /// <returns>Ä¿Â¼´óĞ¡£¨×Ö½Ú£©</returns>
+        /// <param name="directoryPath">ç›®å½•è·¯å¾„</param>
+        /// <returns>ç›®å½•å¤§å°ï¼ˆå­—èŠ‚ï¼‰</returns>
         public static long GetDirectorySize(string directoryPath)
         {
             try
@@ -229,16 +230,16 @@ namespace TSysWatch
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"»ñÈ¡Ä¿Â¼´óĞ¡Òì³££º{directoryPath}£¬´íÎó£º{ex.Message}");
+                LogHelper.Logger.Error($"è·å–ç›®å½•å¤§å°å¼‚å¸¸ï¼š{directoryPath}ï¼Œé”™è¯¯ï¼š{ex.Message}");
                 return 0;
             }
         }
 
         /// <summary>
-        /// ¸ñÊ½»¯×Ö½Ú´óĞ¡
+        /// æ ¼å¼åŒ–å­—èŠ‚å¤§å°
         /// </summary>
-        /// <param name="bytes">×Ö½ÚÊı</param>
-        /// <returns>¸ñÊ½»¯ºóµÄ´óĞ¡</returns>
+        /// <param name="bytes">å­—èŠ‚æ•°</param>
+        /// <returns>æ ¼å¼åŒ–åçš„å¤§å°</returns>
         public static string FormatBytes(long bytes)
         {
             const int scale = 1024;
@@ -255,68 +256,41 @@ namespace TSysWatch
             return "0 Bytes";
         }
 
-        /// <summary>
-        /// ¼ì²éÎÄ¼şÊÇ·ñÂú×ãÊ±¼äÌõ¼ş£¨ÎÄ¼ş³¬¹ıÖ¸¶¨ÌìÊı£©
-        /// </summary>
-        /// <param name="filePath">ÎÄ¼şÂ·¾¶</param>
-        /// <param name="days">ÌìÊıãĞÖµ</param>
-        /// <returns>ÊÇ·ñÂú×ãÊ±¼äÌõ¼ş</returns>
-        public static bool IsFileOlderThanDays(FileInfo fileInfo, int days)
-        {
-            if (days <= 0)
-            {
-                return true; // 0Ìì±íÊ¾²»ÏŞÖÆÊ±¼ä£¬×ÜÊÇ·µ»Øtrue
-            }
-
-            try
-            {
-
-                // È¡ÎÄ¼şµÄ×îºóĞŞ¸ÄÊ±¼ä
-                var fileTime = fileInfo.LastWriteTime;
-                var threshold = DateTime.Now.AddDays(-days);
-                return fileTime < threshold;
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Logger.Error($"¼ì²éÎÄ¼şÊ±¼äÒì³££º{fileInfo.FullName}£¬´íÎó£º{ex.Message}");
-                return false;
-            }
-        }
+       
 
         /// <summary>
-        /// ¼ì²éÊÇ·ñÓ¦¸ÃÉ¾³ıÎÄ¼ş£¨¸ù¾İÅäÖÃµÄÂß¼­¹ØÏµÅĞ¶Ï£©
+        /// æ£€æŸ¥æ˜¯å¦åº”è¯¥åˆ é™¤æ–‡ä»¶ï¼ˆæ ¹æ®é…ç½®çš„é€»è¾‘å…³ç³»åˆ¤æ–­ï¼‰
         /// </summary>
-        /// <param name="config">´ÅÅÌÇåÀíÅäÖÃ</param>
-        /// <param name="currentFreeSpaceGB">µ±Ç°´ÅÅÌÊ£Óà¿Õ¼ä(GB)</param>
-        /// <param name="filePath">ÎÄ¼şÂ·¾¶</param>
-        /// <returns>ÊÇ·ñÓ¦¸ÃÉ¾³ıÎÄ¼ş</returns>
-        public static DeleteReason ShouldDeleteFile(DiskCleanupConfig config, double currentFreeSpaceGB, FileInfo fileInfo)
+        /// <param name="config">ç£ç›˜æ¸…ç†é…ç½®</param>
+        /// <param name="currentFreeSpaceGB">å½“å‰ç£ç›˜å‰©ä½™ç©ºé—´(GB)</param>
+        /// <param name="filePath">æ–‡ä»¶è·¯å¾„</param>
+        /// <returns>æ˜¯å¦åº”è¯¥åˆ é™¤æ–‡ä»¶</returns>
+        public static DeleteReason ShouldDeleteFile(DiskCleanupConfig config, double currentFreeSpaceGB, FileEx fileInfo, DateTime dt)
         {
-            // ¼ì²éÈİÁ¿Ìõ¼ş
-            bool capacityCondition = currentFreeSpaceGB < config.StartDeleteSizeGB;
+            // æ£€æŸ¥å®¹é‡æ¡ä»¶
+            bool capacityCondition = currentFreeSpaceGB < config.StopDeleteSizeGB; 
+            // æ£€æŸ¥æ—¶é—´æ¡ä»¶
+            bool timeCondition = config.StartDeleteFileDays < 0 ? true : dt > fileInfo.LastWriteTime;
 
-            // ¼ì²éÊ±¼äÌõ¼ş
-            bool timeCondition = IsFileOlderThanDays(fileInfo, config.StartDeleteFileDays);
-
-            // ¸ù¾İÂß¼­¹ØÏµ·µ»Ø½á¹û
+            // æ ¹æ®é€»è¾‘å…³ç³»è¿”å›ç»“æœ
             switch (config.LogicMode)
             {
                 case DeleteLogicMode.AND:
-                    // ÇÒ£º±ØĞëÍ¬Ê±Âú×ãÈİÁ¿ºÍÊ±¼äÌõ¼ş
+                    // ä¸”ï¼šå¿…é¡»åŒæ—¶æ»¡è¶³å®¹é‡å’Œæ—¶é—´æ¡ä»¶
                     return new DeleteReason
                     {
                         CanDelete = capacityCondition && timeCondition,
-                        Reason = "Í¬Ê±Âú×ãÈİÁ¿ºÍÊ±¼äÌõ¼ş",
+                        Reason = "åŒæ—¶æ»¡è¶³å®¹é‡å’Œæ—¶é—´æ¡ä»¶",
                         FileInfo = fileInfo
                     };
                 case DeleteLogicMode.OR:
-                    // »ò£ºÂú×ãÈİÁ¿»òÊ±¼äÌõ¼şÖ®Ò»¼´¿É
+                    // æˆ–ï¼šæ»¡è¶³å®¹é‡æˆ–æ—¶é—´æ¡ä»¶ä¹‹ä¸€å³å¯
                     if (capacityCondition)
                     {
                         return new DeleteReason()
                         {
                             CanDelete = true,
-                            Reason = "ÈİÁ¿²»×ã",
+                            Reason = "å®¹é‡ä¸è¶³",
                             FileInfo = fileInfo
                         };
                     }
@@ -325,7 +299,7 @@ namespace TSysWatch
                         return new DeleteReason()
                         {
                             CanDelete = true,
-                            Reason = "ÎÄ¼ş¹ıÆÚ",
+                            Reason = "æ–‡ä»¶è¿‡æœŸ",
                             FileInfo = fileInfo
                         };
                     }
@@ -334,7 +308,7 @@ namespace TSysWatch
                         return new DeleteReason()
                         {
                             CanDelete = false,
-                            Reason = "²»Âú×ãÉ¾³ıÌõ¼ş",
+                            Reason = "ä¸æ»¡è¶³åˆ é™¤æ¡ä»¶",
                             FileInfo = fileInfo
                         };
                     }
@@ -344,7 +318,7 @@ namespace TSysWatch
                         return new DeleteReason()
                         {
                             CanDelete = true,
-                            Reason = "ÈİÁ¿²»×ã",
+                            Reason = "å®¹é‡ä¸è¶³",
                             FileInfo = fileInfo
                         };
                     }
@@ -353,7 +327,7 @@ namespace TSysWatch
                         return new DeleteReason()
                         {
                             CanDelete = true,
-                            Reason = "ÎÄ¼ş¹ıÆÚ",
+                            Reason = "æ–‡ä»¶è¿‡æœŸ",
                             FileInfo = fileInfo
                         };
                     }
@@ -362,7 +336,7 @@ namespace TSysWatch
                         return new DeleteReason()
                         {
                             CanDelete = false,
-                            Reason = "²»Âú×ãÉ¾³ıÌõ¼ş",
+                            Reason = "ä¸æ»¡è¶³åˆ é™¤æ¡ä»¶",
                             FileInfo = fileInfo
                         };
                     }

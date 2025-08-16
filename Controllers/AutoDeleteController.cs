@@ -72,54 +72,54 @@ namespace TSysWatch.Controllers
         /// <param name="logicMode">逻辑模式</param>
         /// <returns></returns>
         [HttpPost]
-        public IActionResult TestDeleteCondition([FromBody] TestConditionRequest request)
-        {
-            try
-            {
-                if (!System.IO.File.Exists(request.FilePath))
-                {
-                    return Json(new { success = false, message = "文件不存在" });
-                }
+        //public IActionResult TestDeleteCondition([FromBody] TestConditionRequest request)
+        //{
+        //    try
+        //    {
+        //        if (!System.IO.File.Exists(request.FilePath))
+        //        {
+        //            return Json(new { success = false, message = "文件不存在" });
+        //        }
 
-                var driveInfo = new DriveInfo(request.DriveLetter);
-                double currentFreeSpaceGB = driveInfo.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
+        //        var driveInfo = new DriveInfo(request.DriveLetter);
+        //        double currentFreeSpaceGB = driveInfo.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
 
-                var config = new DiskCleanupConfig
-                {
-                    DriveLetter = request.DriveLetter,
-                    StartDeleteSizeGB = request.StartDeleteSizeGB,
-                    StartDeleteFileDays = request.StartDeleteFileDays,
-                    LogicMode = Enum.Parse<DeleteLogicMode>(request.LogicMode, true)
-                };
-                // 
-                FileInfo fileInfo = new FileInfo(request.FilePath);
-                var deleteReason = AutoDeleteFileManager.ShouldDeleteFile(config, currentFreeSpaceGB, fileInfo);
-                var shouldDelete = deleteReason.CanDelete;
+        //        var config = new DiskCleanupConfig
+        //        {
+        //            DriveLetter = request.DriveLetter,
+        //            StartDeleteSizeGB = request.StartDeleteSizeGB,
+        //            StartDeleteFileDays = request.StartDeleteFileDays,
+        //            LogicMode = Enum.Parse<DeleteLogicMode>(request.LogicMode, true)
+        //        };
+        //        // 
+        //        FileInfo fileInfo = new FileInfo(request.FilePath);
+        //        var deleteReason = AutoDeleteFileManager.ShouldDeleteFile(config, currentFreeSpaceGB, fileInfo);
+        //        var shouldDelete = deleteReason.CanDelete;
 
-                // var fileInfo = new FileInfo(request.FilePath);
-                var fileAge = DateTime.Now - (fileInfo.CreationTime > fileInfo.LastWriteTime ? fileInfo.CreationTime : fileInfo.LastWriteTime);
+        //        // var fileInfo = new FileInfo(request.FilePath);
+        //        var fileAge = DateTime.Now - (fileInfo.CreationTime > fileInfo.LastWriteTime ? fileInfo.CreationTime : fileInfo.LastWriteTime);
 
-                // 检查各个条件
-                bool capacityCondition = currentFreeSpaceGB < request.StartDeleteSizeGB;
-                bool timeCondition = AutoDeleteFileManager.IsFileOlderThanDays(fileInfo, request.StartDeleteFileDays);
+        //        // 检查各个条件
+        //        bool capacityCondition = currentFreeSpaceGB < request.StartDeleteSizeGB;
+        //        bool timeCondition = AutoDeleteFileManager.IsFileOlderThanDays(fileInfo, request.StartDeleteFileDays);
 
-                return Json(new
-                {
-                    success = true,
-                    shouldDelete = shouldDelete,
-                    currentFreeSpaceGB = Math.Round(currentFreeSpaceGB, 2),
-                    fileAge = fileAge.Days,
-                    capacityCondition = capacityCondition,
-                    timeCondition = timeCondition,
-                    logicMode = request.LogicMode,
-                    explanation = GetDeleteExplanation(capacityCondition, timeCondition, config.LogicMode, shouldDelete)
-                });
-            }
-            catch (Exception ex)
-            {
-                return Json(new { success = false, message = ex.Message });
-            }
-        }
+        //        return Json(new
+        //        {
+        //            success = true,
+        //            shouldDelete = shouldDelete,
+        //            currentFreeSpaceGB = Math.Round(currentFreeSpaceGB, 2),
+        //            fileAge = fileAge.Days,
+        //            capacityCondition = capacityCondition,
+        //            timeCondition = timeCondition,
+        //            logicMode = request.LogicMode,
+        //            explanation = GetDeleteExplanation(capacityCondition, timeCondition, config.LogicMode, shouldDelete)
+        //        });
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return Json(new { success = false, message = ex.Message });
+        //    }
+        //}
 
         private string GetLogicModeDescription(DeleteLogicMode mode)
         {
