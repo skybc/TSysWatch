@@ -1,0 +1,56 @@
+﻿# CPU 核心数管理器配置文件
+# 支持的配置节：[General], [ProcessName], [PID], [ProcessCoreBinding], [PidCoreBinding], [Critical]
+
+[General]
+DefaultCoreCount=4
+ScanIntervalSeconds=2
+Enabled=true
+
+[ProcessName]
+# 格式: 进程名=核心数
+chrome=2
+firefox=2
+notepad=1
+code=4
+devenv=6
+java=2
+python=1
+
+[PID]
+# 格式: PID=核心数 (优先级高于进程名)
+# 1234=8
+# 5678=1
+
+[ProcessCoreBinding]
+# 格式: 进程名=核心索引列表(用逗号分隔) 例: chrome=0,2,4
+# 核心绑定优先级高于核心数设置
+# 
+# 使用场景示例：
+# 游戏进程绑定到性能核心
+game=0,2,4,6
+# 浏览器绑定到特定核心避免干扰
+chrome=1,3
+firefox=5,7
+# 开发工具使用更多核心
+code=0,1,2,3
+devenv=0,1,2,3,4,5
+# 视频处理软件专用核心
+ffmpeg=0,2,4,6
+obs64=1,3,5,7
+# 音频处理软件
+audacity=4,5
+
+[PidCoreBinding]
+# 格式: PID=核心索引列表(用逗号分隔) 例: 1234=0,2,4
+# PID 核心绑定优先级最高，适用于临时或特殊进程
+# 
+# 注意：PID 是动态的，每次进程启动都会改变
+# 这个配置主要用于运行时的临时绑定
+# 例如：
+# 1234=0,2,4
+# 5678=1,3,5,7
+
+[Critical]
+# 系统关键进程列表，用逗号分隔
+# 这些进程将跳过核心绑定设置，保持系统稳定性
+Processes=System,csrss,wininit,winlogon,services,lsass,dwm,explorer
