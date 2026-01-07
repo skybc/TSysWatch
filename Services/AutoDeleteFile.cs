@@ -6,7 +6,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,7 +16,8 @@ namespace TSysWatch
 
     public class AutoDeleteFile
     {
-        private static readonly string ConfigFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoDeleteFile.ini");
+        private static readonly string ConfigDirPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
+        private static readonly string ConfigFilePath = Path.Combine(ConfigDirPath, "AutoDeleteFile.json");
         private static List<DiskCleanupConfig> _configs = new List<DiskCleanupConfig>();
         private static bool _isRunning = false;
 
@@ -41,26 +43,38 @@ namespace TSysWatch
         private static void Run()
         {
             _isRunning = true;
+            List<DiskCleanupConfig> configCache = null;
+            int configCheckInterval = 0;
+            const int configCheckFrequency = 10; // 每10次循环检查一次配置
+            
             while (_isRunning)
             {
                 try
                 {
-                    // 读取配置文件
-                    if (_configs.isEmpty())
+                    // 定期重新读取配置（每10次循环检查一次）
+                    if (configCheckInterval++ >= configCheckFrequency)
                     {
-                        ReadIniFile();
-                        // 建立文件索引
-                        foreach (var config in _configs)
+                        ReadJsonFile();
+                        configCache = _configs;
+                        configCheckInterval = 0;
+                        
+                        if (configCache.isEmpty())
                         {
-                            // build file index
-                            BuildIndex(_configs);
+                            // 建立文件索引
+                            foreach (var config in configCache)
+                            {
+                                BuildIndex(configCache);
+                            }
                         }
                     }
 
-                    // 检查每个磁盘配置
-                    foreach (var config in _configs)
+                    // 使用缓存的配置检查磁盘
+                    if (configCache != null)
                     {
-                        CheckAndCleanDisk(config);
+                        foreach (var config in configCache)
+                        {
+                            CheckAndCleanDisk(config);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -82,123 +96,97 @@ namespace TSysWatch
         /// <summary>
         /// 读取INI配置文件
         /// </summary>
-        private static void ReadIniFile()
+        /// <summary>
+        /// 从JSON配置文件读取配置
+        /// </summary>
+        private static void ReadJsonFile()
         {
             try
             {
+                EnsureConfigDirectory();
                 if (!File.Exists(ConfigFilePath))
                 {
-                    CreateDefaultIniFile();
+                    CreateDefaultJsonFile();
                     return;
                 }
 
                 _configs.Clear();
-                var lines = File.ReadAllLines(ConfigFilePath, Encoding.UTF8);
-                DiskCleanupConfig currentConfig = null;
+                var json = File.ReadAllText(ConfigFilePath);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                _configs = JsonSerializer.Deserialize<List<DiskCleanupConfig>>(json, options) ?? new List<DiskCleanupConfig>();
 
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#") || trimmedLine.StartsWith(";"))
-                        continue;
-
-                    if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                    {
-                        // 新的磁盘配置节
-                        if (currentConfig != null)
-                        {
-                            _configs.Add(currentConfig);
-                        }
-                        currentConfig = new DiskCleanupConfig
-                        {
-                            DriveLetter = trimmedLine.Substring(1, trimmedLine.Length - 2)
-                        };
-                    }
-                    else if (currentConfig != null && trimmedLine.Contains("="))
-                    {
-                        var parts = trimmedLine.Split('=', 2);
-                        if (parts.Length == 2)
-                        {
-                            var key = parts[0].Trim().ToLower();
-                            var value = parts[1].Trim();
-
-                            switch (key)
-                            {
-                                case "deletedirectories":
-                                    currentConfig.DeleteDirectories = value.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                        .Select(d => d.Trim()).ToList();
-                                    break;
-                                case "startdeletesizegb":
-                                    if (double.TryParse(value, out double startSize))
-                                        currentConfig.StartDeleteSizeGB = startSize;
-                                    break;
-                                case "stopdeletesizegb":
-                                    if (double.TryParse(value, out double stopSize))
-                                        currentConfig.StopDeleteSizeGB = stopSize;
-                                    break;
-                                case "startdeletefiledays":
-                                    if (int.TryParse(value, out int fileDays))
-                                        currentConfig.StartDeleteFileDays = fileDays;
-                                    break;
-                                case "logicmode":
-                                    if (Enum.TryParse<DeleteLogicMode>(value, true, out DeleteLogicMode mode))
-                                        currentConfig.LogicMode = mode;
-                                    break;
-                            }
-                        }
-                    }
-                }
-
-                // 添加最后一个配置
-                if (currentConfig != null)
-                {
-                    _configs.Add(currentConfig);
-                }
-
-                LogHelper.Logger.Information($"读取配置文件成功，共{_configs.Count}个磁盘配置");
+                LogHelper.Logger.Information($"读取JSON配置文件成功，共{_configs.Count}个磁盘配置");
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"读取配置文件异常：{ex.Message}", ex);
+                LogHelper.Logger.Error($"读取JSON配置文件异常：{ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 确保配置目录存在
+        /// </summary>
+        private static void EnsureConfigDirectory()
+        {
+            try
+            {
+                if (!Directory.Exists(ConfigDirPath))
+                {
+                    Directory.CreateDirectory(ConfigDirPath);
+                    LogHelper.Logger.Information($"创建配置目录：{ConfigDirPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Logger.Error($"创建配置目录异常：{ex.Message}", ex);
             }
         }
 
         /// <summary>
         /// 创建默认INI配置文件
         /// </summary>
-        private static void CreateDefaultIniFile()
+        /// <summary>
+        /// 创建默认JSON配置文件
+        /// </summary>
+        private static void CreateDefaultJsonFile()
         {
             try
             {
-                var defaultConfig = @"# 自动删除文件配置
-# 格式：[磁盘驱动器]
-# DeleteDirectories=目录1,目录2,目录3
-# StartDeleteSizeGB=开始删除时的磁盘剩余空间(GB)
-# StopDeleteSizeGB=停止删除时的磁盘剩余空间(GB)
-# StartDeleteFileDays=开始删除文件时间(天) - 只删除超过N天的文件，0表示不限制时间
-# LogicMode=删除条件逻辑关系 - AND(且)/OR(或)，AND表示同时满足容量和时间条件，OR表示满足任一条件
+                EnsureConfigDirectory();
+                var defaultConfigs = new List<DiskCleanupConfig>
+                {
+                    new DiskCleanupConfig
+                    {
+                        DriveLetter = "C:",
+                        DeleteDirectories = new List<string> { "C:\\Temp", "C:\\Logs", "C:\\Cache" },
+                        StartDeleteSizeGB = 5.0,
+                        StopDeleteSizeGB = 10.0,
+                        StartDeleteFileDays = 30,
+                        LogicMode = DeleteLogicMode.OR
+                    },
+                    new DiskCleanupConfig
+                    {
+                        DriveLetter = "D:",
+                        DeleteDirectories = new List<string> { "D:\\Temp", "D:\\Logs" },
+                        StartDeleteSizeGB = 10.0,
+                        StopDeleteSizeGB = 20.0,
+                        StartDeleteFileDays = 7,
+                        LogicMode = DeleteLogicMode.AND
+                    }
+                };
 
-[C:]
-DeleteDirectories=C:\temp,C:\logs,C:\cache
-StartDeleteSizeGB=5.0
-StopDeleteSizeGB=10.0
-StartDeleteFileDays=30
-LogicMode=OR
-
-[D:]
-DeleteDirectories=D:\temp,D:\logs
-StartDeleteSizeGB=10.0
-StopDeleteSizeGB=20.0
-StartDeleteFileDays=7
-LogicMode=AND
-";
-
-                File.WriteAllText(ConfigFilePath, defaultConfig, Encoding.UTF8);
-                LogHelper.Logger.Information($"创建默认配置文件：{ConfigFilePath}");
+                var options = new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                };
+                var json = JsonSerializer.Serialize(defaultConfigs, options);
+                File.WriteAllText(ConfigFilePath, json, System.Text.Encoding.UTF8);
+                LogHelper.Logger.Information($"创建默认JSON配置文件：{ConfigFilePath}");
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"创建默认配置文件异常：{ex.Message}", ex);
+                LogHelper.Logger.Error($"创建默认JSON配置文件异常：{ex.Message}", ex);
             }
         }
 
@@ -247,7 +235,11 @@ LogicMode=AND
                 long totalDeletedSize = 0;
                 var logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot/record/auto_delete", dt2.ToString("yyyy/MM"), $"{dt2.ToString("yyyyMMdd")}.txt");
                 // create
-                Directory.CreateDirectory(Path.GetDirectoryName(logFilePath));
+                var logDirectory = Path.GetDirectoryName(logFilePath);
+                if (!string.IsNullOrEmpty(logDirectory))
+                {
+                    Directory.CreateDirectory(logDirectory);
+                }
                 // 检查文件是否存在
                 if (!File.Exists(logFilePath))
                 {
@@ -255,7 +247,9 @@ LogicMode=AND
                     File.Create(logFilePath).Dispose();
                 }
 
-                using var stream = new StreamWriter(logFilePath, true);
+                // 收集日志消息，最后一次性写入，避免频繁打开文件
+                var logMessages = new List<string>();
+                
                 // 遍历候选文件列表，按时间排序
                 LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 找到 {candidateFiles.Count} 个候选文件，开始删除");
                 foreach (var file in candidateFiles.OrderBy(f => f.LastWriteTime))
@@ -283,7 +277,7 @@ LogicMode=AND
                         totalDeletedSize += file.Length;
                         // 删除文件单独日志，每天一个，放到：当前应用目录+/record/auto_delete/yyyy/MM/yyyyMMdd.txt里面
                         string log = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} 删除文件：{file.FullName}，大小：{fileSize / (1024.0 * 1024.0):F2}MB,文件修改日期：{file.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")}，原因：{dr.Reason}，文件年龄：{fileAge.Days}天";
-                        stream.WriteLine(log);
+                        logMessages.Add(log);
                         LogHelper.Logger.Information(log);
                     }
                     catch (Exception ex)
@@ -291,7 +285,21 @@ LogicMode=AND
                         LogHelper.Logger.Error($"删除文件失败：{file.FullName}，错误：{ex.Message}");
                     }
                 }
-                stream.Flush();
+                
+                // 一次性写入所有日志消息
+                if (logMessages.Count > 0)
+                {
+                    using (var stream = new StreamWriter(logFilePath, true))
+                    {
+                        foreach (var log in logMessages)
+                        {
+                            stream.WriteLine(log);
+                        }
+                        stream.Flush();
+                    }
+                    logMessages.Clear();
+                }
+                
                 LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 清理完成，删除了 {deletedCount} 个文件，总大小：{totalDeletedSize / (1024.0 * 1024.0):F2}MB");
             }
             catch (Exception ex)
@@ -301,8 +309,19 @@ LogicMode=AND
         }
         public class FileEx
         {
-            public string FullName { get; set; }
+            /// <summary>
+            /// 完整文件路径
+            /// </summary>
+            public string FullName { get; set; } = "";
+
+            /// <summary>
+            /// 最后写入时间
+            /// </summary>
             public DateTime LastWriteTime { get; set; }
+
+            /// <summary>
+            /// 文件大小（字节）
+            /// </summary>
             public int Length { get; set; }
         }
 

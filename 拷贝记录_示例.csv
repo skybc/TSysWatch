@@ -1,9 +1,0 @@
-时间,操作类型,源文件路径,目标文件路径,文件大小(字节),状态
-2025-01-19 10:30:15,拷贝,D:\Photos\IMG001.jpg,E:\Backup\Photos\IMG001.jpg,2048576,成功
-2025-01-19 10:30:16,移动,D:\Photos\IMG001.jpg,D:\Photos_Processed\IMG001.jpg,2048576,成功
-2025-01-19 10:30:17,跳过拷贝,D:\Photos\IMG002.jpg,E:\Backup\Photos\IMG002.jpg,1536000,文件已存在且相同
-2025-01-19 10:30:18,移动,D:\Photos\IMG002.jpg,D:\Photos_Processed\IMG002.jpg,1536000,成功
-2025-01-19 10:30:20,拷贝,D:\Photos\子目录\IMG003.png,E:\Backup\Photos\子目录\IMG003.png,956432,成功
-2025-01-19 10:30:21,移动,D:\Photos\子目录\IMG003.png,D:\Photos_Processed\子目录\IMG003.png,956432,成功
-2025-01-19 10:30:25,拷贝,D:\Photos\IMG004.bmp,E:\Backup\Photos\IMG004.bmp,4567890,失败：磁盘空间不足
-2025-01-19 10:30:26,删除,D:\Photos\IMG005.gif,N/A,234567,成功

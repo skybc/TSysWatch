@@ -43,88 +43,62 @@ namespace TSysWatch.Services
             _computer.Accept(new UpdateVisitor());
             logger.Information("Hardware monitoring started.");
             StringBuilder stringBuilder = new StringBuilder();
-            while (true)
+            try
             {
-                try
+                while (true)
                 {
-                    stringBuilder.Clear();
-                    // 更新硬件信息,输出头信息
-                    stringBuilder.AppendLine("Updating hardware information...");
-                    // 打印进程信息                                
-                    stringBuilder.AppendLine("-- Process Information --");
-                    var processes = System.Diagnostics.Process.GetProcesses()
-                        .OrderByDescending(p => p.WorkingSet64)
-                        .Take(10)
-                        .Select(p => new
-                        {
-                            ProcessName = p.ProcessName,
-                            PID = p.Id,
-                            MemoryUsage = p.WorkingSet64 / 1024 / 1024,
-                            PrivateMemorySize = p.PeakWorkingSet64 / 1024 / 1024,
-                            HandleCount = p.HandleCount,
-                        })
-                        .ToList();
-                    stringBuilder.AppendLine($"{"Process Name",-50} {"PID",-10} {"Memory Usage (MB)",-20} {"PeakWorkingSet64 (MB)",-20} {"Handle Count",-15} ");
-                    foreach (var process in processes)
+                    try
                     {
-                        stringBuilder.AppendLine($"{process.ProcessName,-50} {process.PID,-10} {process.MemoryUsage.ToString("F2"),-20} {process.PrivateMemorySize.ToString("F2"),-20} {process.HandleCount,-15} ");
-
-                    }
-                    stringBuilder.AppendLine("-- End of Process Information --");
-
-                    stringBuilder.AppendLine("-- Hardware Information --");
-                    stringBuilder.AppendLine("Hardware Information:");
-                    var hardwareRows = new List<object[]>();
-                    foreach (var hardware in _computer.Hardware)
-                    {
-                        stringBuilder.AppendLine($"Hardware: {hardware.Name},Hard type:{hardware.HardwareType}");
-                        hardware.Update();
-                        stringBuilder.AppendLine($"{"Sensor",-30} {"Value",-20} {"Unit",-10}");
-                        foreach (var sensor in hardware.Sensors)
+                        stringBuilder.Clear();
+                        // 更新硬件信息,输出头信息
+                        stringBuilder.AppendLine("Updating hardware information...");
+                        // 打印进程信息                                
+                        stringBuilder.AppendLine("-- Process Information --");
+                        var processes = System.Diagnostics.Process.GetProcesses();
+                        try
                         {
-                            if (sensor.Value.HasValue)
-                            {
-                                string unit = sensor.SensorType switch
+                            var topProcesses = processes
+                                .OrderByDescending(p => p.WorkingSet64)
+                                .Take(10)
+                                .Select(p => new
                                 {
-                                    SensorType.Temperature => "°C",
-                                    SensorType.Voltage => "V",
-                                    SensorType.Fan => "RPM",
-                                    SensorType.Power => "W",
-                                    SensorType.Load => "%",
-                                    SensorType.Clock => "MHz",
-                                    SensorType.Data => "Data",
-                                    SensorType.Flow => "L/h",
-                                    SensorType.Level => "%",
-                                    SensorType.Frequency => "Hz",
-                                    SensorType.Current => "A",
-                                    SensorType.Energy => "J",
-                                    SensorType.Control => "",
-                                    SensorType.Factor => "",
-                                    SensorType.SmallData => "",
-                                    SensorType.Throughput => "",
-                                    SensorType.TimeSpan => "",
-                                    SensorType.Noise => "dB",
-                                    SensorType.Conductivity => "",
-                                    SensorType.Humidity => "",
-                                    _ => ""
-                                };
-                                stringBuilder.AppendLine($"{sensor.Name,-30} {sensor.Value.Value.ToString("F2"),-20} {unit,-10}");
-                                hardwareRows.Add(new object[] { hardware.Name, sensor.Name, sensor.Value.Value.ToString("F2"), unit });
-                                // 添加到存储中（数据库）
-                                AddHardwareData(hardware.Name, sensor.Name, sensor.Value.Value, unit);
+                                    ProcessName = p.ProcessName,
+                                    PID = p.Id,
+                                    MemoryUsage = p.WorkingSet64 / 1024 / 1024,
+                                    PrivateMemorySize = p.PeakWorkingSet64 / 1024 / 1024,
+                                    HandleCount = p.HandleCount,
+                                })
+                                .ToList();
+                            stringBuilder.AppendLine($"{"Process Name",-50} {"PID",-10} {"Memory Usage (MB)",-20} {"PeakWorkingSet64 (MB)",-20} {"Handle Count",-15} ");
+                            foreach (var process in topProcesses)
+                            {
+                                stringBuilder.AppendLine($"{process.ProcessName,-50} {process.PID,-10} {process.MemoryUsage.ToString("F2"),-20} {process.PrivateMemorySize.ToString("F2"),-20} {process.HandleCount,-15} ");
+
                             }
                         }
-
-                        foreach (var subHardware in hardware.SubHardware)
+                        finally
                         {
-                            subHardware.Update();
-                            stringBuilder.AppendLine($"Sub Hardware: {subHardware.Name},Hard type:{subHardware.HardwareType}");
-                            stringBuilder.AppendLine($"{"Sensor",-30} {"Value",-20} {"Unit",-10}");
-                            foreach (var subSensor in subHardware.Sensors)
+                            // 释放所有进程对象
+                            foreach (var process in processes)
                             {
-                                if (subSensor.Value.HasValue)
+                                process?.Dispose();
+                            }
+                        }
+                        stringBuilder.AppendLine("-- End of Process Information --");
+
+                        stringBuilder.AppendLine("-- Hardware Information --");
+                        stringBuilder.AppendLine("Hardware Information:");
+                        var hardwareRows = new List<object[]>();
+                        foreach (var hardware in _computer.Hardware)
+                        {
+                            stringBuilder.AppendLine($"Hardware: {hardware.Name},Hard type:{hardware.HardwareType}");
+                            hardware.Update();
+                            stringBuilder.AppendLine($"{"Sensor",-30} {"Value",-20} {"Unit",-10}");
+                            foreach (var sensor in hardware.Sensors)
+                            {
+                                if (sensor.Value.HasValue)
                                 {
-                                    string subUnit = subSensor.SensorType switch
+                                    string unit = sensor.SensorType switch
                                     {
                                         SensorType.Temperature => "°C",
                                         SensorType.Voltage => "V",
@@ -148,27 +122,83 @@ namespace TSysWatch.Services
                                         SensorType.Humidity => "",
                                         _ => ""
                                     };
-                                    stringBuilder.AppendLine($"{subSensor.Name,-30} {subSensor.Value.Value.ToString("F2"),-20} {subUnit,-10}");
-                                    hardwareRows.Add(new object[] { $"{hardware.Name} - {subHardware.Name}", subSensor.Name, subSensor.Value.Value.ToString("F2"), subUnit });
+                                    stringBuilder.AppendLine($"{sensor.Name,-30} {sensor.Value.Value.ToString("F2"),-20} {unit,-10}");
+                                    hardwareRows.Add(new object[] { hardware.Name, sensor.Name, sensor.Value.Value.ToString("F2"), unit });
                                     // 添加到存储中（数据库）
-                                    AddHardwareData($"{hardware.Name} - {subHardware.Name}", subSensor.Name, subSensor.Value.Value, subUnit);
                                 }
                             }
+
+                            foreach (var subHardware in hardware.SubHardware)
+                            {
+                                subHardware.Update();
+                                stringBuilder.AppendLine($"Sub Hardware: {subHardware.Name},Hard type:{subHardware.HardwareType}");
+                                stringBuilder.AppendLine($"{"Sensor",-30} {"Value",-20} {"Unit",-10}");
+                                foreach (var subSensor in subHardware.Sensors)
+                                {
+                                    if (subSensor.Value.HasValue)
+                                    {
+                                        string subUnit = subSensor.SensorType switch
+                                        {
+                                            SensorType.Temperature => "°C",
+                                            SensorType.Voltage => "V",
+                                            SensorType.Fan => "RPM",
+                                            SensorType.Power => "W",
+                                            SensorType.Load => "%",
+                                            SensorType.Clock => "MHz",
+                                            SensorType.Data => "Data",
+                                            SensorType.Flow => "L/h",
+                                            SensorType.Level => "%",
+                                            SensorType.Frequency => "Hz",
+                                            SensorType.Current => "A",
+                                            SensorType.Energy => "J",
+                                            SensorType.Control => "",
+                                            SensorType.Factor => "",
+                                            SensorType.SmallData => "",
+                                            SensorType.Throughput => "",
+                                            SensorType.TimeSpan => "",
+                                            SensorType.Noise => "dB",
+                                            SensorType.Conductivity => "",
+                                            SensorType.Humidity => "",
+                                            _ => ""
+                                        };
+                                        stringBuilder.AppendLine($"{subSensor.Name,-30} {subSensor.Value.Value.ToString("F2"),-20} {subUnit,-10}");
+                                        hardwareRows.Add(new object[] { $"{hardware.Name} - {subHardware.Name}", subSensor.Name, subSensor.Value.Value.ToString("F2"), subUnit });
+                                        // 添加到存储中（数据库）
+                                    }
+                                }
+                            }
+
                         }
-
+                        // 清理 hardwareRows
+                        hardwareRows.Clear();
+                        string report = _computer.GetReport();
+                        stringBuilder.AppendLine("-- End of Hardware Information --");
+                        // 仅记录日志，不输出到控制台，减少I/O开销
+                         logger.Information(stringBuilder.ToString());
+                        Console.Clear();
                     }
-                    string report = _computer.GetReport();
-                    stringBuilder.AppendLine("-- End of Hardware Information --");
-                    Console.WriteLine(stringBuilder.ToString());
-                    logger.Information(stringBuilder.ToString());
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, "An error occurred while monitoring hardware.");
+                    }
+                    Thread.Sleep(5000); // 每5秒更新一次
+                    GC.Collect();
+                    // 清理控制台
+                   
 
                 }
-                catch (Exception ex)
+            }
+            finally
+            {
+                // 确保硬件资源被释放
+                if (_computer != null)
                 {
-                    logger.Error(ex, "An error occurred while monitoring hardware.");
+                    try
+                    {
+                        _computer.Close();
+                    }
+                    catch { }
                 }
-                SaveToDb();
-                Thread.Sleep(5000); // 每5秒更新一次
             }
         }
 
@@ -200,109 +230,7 @@ namespace TSysWatch.Services
         }
 
         private DateTime lastDeleteTime = DateTime.MinValue;
-
-        private void SaveToDb()
-        {
-            try
-            {
-                if (RealTimeDatas.IsEmpty())
-                {
-                    return;
-                }
-
-                using var db = CreateSqlSugarClient();
-                db.Ado.ExecuteCommand("PRAGMA synchronous = NORMAL;");
-                db.Ado.ExecuteCommand("PRAGMA journal_mode = TRUNCATE;");
-                db.Insertable(this.RealTimeDatas).SplitTable().ExecuteCommand();
-                // log
-                LogHelper.Logger.Information("存储数据数据库成功!");
-                // 删除1个月前的数据
-                if (lastDeleteTime.Date != DateTime.Now.Date)
-                {
-                    //db.Deleteable<RealTimeData>().Where(r => r.CreateTime < DateTime.Now.AddDays(-30));
-                    lastDeleteTime = DateTime.Now;
-                    //删除一个月前的空表
-                    var tableNames = db.DbMaintenance.GetTableInfoList(false).Where(r => r.Name.StartsWith("RealTimeData")).Select(r => r.Name).ToList();
-                    // 查找小于RealTimeData_yyyyMMdd 30天前的数据表
-                    string beginDeleteTableName = $"RealTimeData_{DateTime.Now.AddDays(-30).ToString("yyyyMMdd")}";
-                    var deleteTablenames = tableNames.Where(r => r.CompareTo(beginDeleteTableName) < 0);
-                    foreach (var table in deleteTablenames)
-                    {
-                        db.DbMaintenance.DropTable(table);
-                    }
-                    // 执行数据收缩
-                    db.Ado.ExecuteCommand("VACUUM;");
-                }
-            }
-            catch (Exception ex)
-            {
-                // log
-                LogHelper.Logger.Error("存储到数据库异常，" + ex.Message, ex);
-            }
-            this.RealTimeDatas.Clear();
-
-        }
-
-        private void AddHardwareData(string hardName, string sensorName, float val, string unit)
-        {
-            try
-            {
-                // 添加到存储中（数据库）
-                if (string.IsNullOrWhiteSpace(hardName) || string.IsNullOrWhiteSpace(sensorName))
-                {
-                    return; // 硬件名称或传感器名称不能为空
-                }
-                // 
-                var sensorInfo = this.SensorInfos.Where(r => r.HardName == hardName && r.SensorName == sensorName).FirstOrDefault();
-                if (sensorInfo == null)
-                {
-
-                    using (var db = CreateSqlSugarClient())
-                    {
-                        // 数据库中查询是否存在该硬件和传感器
-                        sensorInfo = db.Queryable<SensorInfo>()
-                            .Where(r => r.HardName == hardName && r.SensorName == sensorName)
-                            .First();
-                        if (sensorInfo == null)
-                        {
-                            // 如果不存在，则添加
-                            sensorInfo = new SensorInfo()
-                            {
-                                HardName = hardName,
-                                SensorName = sensorName,
-                                HardType = "", // 这里可以根据实际情况设置硬件类型
-                                Unit = unit
-                            };
-                            // 添加到SensorInfos列表中
-                            this.SensorInfos.Add(sensorInfo);
-                            //
-                            db.Insertable(sensorInfo).ExecuteCommand();
-                        }
-                        else
-                        {
-                            // 如果存在，则更新
-                            this.SensorInfos.Add(sensorInfo);
-                        }
-                    }
-                }
-
-                RealTimeData realTimeData = new RealTimeData()
-                {
-                    TypeId = sensorInfo.Id,
-                    Value = val
-                };
-                this.RealTimeDatas.Add(realTimeData);
-
-            }
-            catch (Exception ex)
-            {
-                // log
-                LogHelper.Logger.Error("保存数据到临时数据异常！");
-
-            }
-
-
-        }
+ 
     }
 
 

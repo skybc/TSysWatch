@@ -17,10 +17,87 @@ namespace TSysWatch.Controllers
             var configs = AutoDeleteFileManager.GetCurrentConfigs();
             var drives = AutoDeleteFileManager.GetDriveInfos();
 
-            ViewBag.Drives = drives;
-            ViewBag.Configs = configs;
+            var configDisplays = configs.Select(config => new DiskCleanupConfigDisplay
+            {
+                DriveLetter = config.DriveLetter,
+                DeleteDirectories = config.DeleteDirectories,
+                StartDeleteSizeGB = config.StartDeleteSizeGB,
+                StopDeleteSizeGB = config.StopDeleteSizeGB,
+                StartDeleteFileDays = config.StartDeleteFileDays,
+                LogicMode = config.LogicMode.ToString()
+            }).ToList();
 
-            return View(configs);
+            var driveInfos = drives.Select(drive => new DriveInfoDisplay
+            {
+                DriveLetter = drive.Name.TrimEnd('\\'),
+                TotalSize = AutoDeleteFileManager.FormatBytes(drive.TotalSize),
+                FreeSpace = AutoDeleteFileManager.FormatBytes(drive.AvailableFreeSpace),
+                FreeSpaceGB = Math.Round(drive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0), 2)
+            }).ToList();
+
+            var viewModel = new AutoDeleteFilePageViewModel
+            {
+                Configs = configDisplays,
+                Drives = driveInfos
+            };
+
+            return View(viewModel);
+        }
+
+        /// <summary>
+        /// 获取配置列表的HTML（Partial View）
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        public IActionResult GetConfigsHtml()
+        {
+            try
+            {
+                var configs = AutoDeleteFileManager.GetCurrentConfigs();
+
+                var configDisplays = configs.Select(config => new DiskCleanupConfigDisplay
+                {
+                    DriveLetter = config.DriveLetter,
+                    DeleteDirectories = config.DeleteDirectories,
+                    StartDeleteSizeGB = config.StartDeleteSizeGB,
+                    StopDeleteSizeGB = config.StopDeleteSizeGB,
+                    StartDeleteFileDays = config.StartDeleteFileDays,
+                    LogicMode = config.LogicMode.ToString()
+                }).ToList();
+
+                return PartialView("_ConfigList", configDisplays);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 获取驱动器列表的HTML（Partial View）
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        public IActionResult GetDrivesHtml()
+        {
+            try
+            {
+                var drives = AutoDeleteFileManager.GetDriveInfos();
+
+                var driveInfos = drives.Select(drive => new DriveInfoDisplay
+                {
+                    DriveLetter = drive.Name.TrimEnd('\\'),
+                    TotalSize = AutoDeleteFileManager.FormatBytes(drive.TotalSize),
+                    FreeSpace = AutoDeleteFileManager.FormatBytes(drive.AvailableFreeSpace),
+                    FreeSpaceGB = Math.Round(drive.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0), 2)
+                }).ToList();
+
+                return PartialView("_DrivesList", driveInfos);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         /// <summary>
@@ -63,63 +140,70 @@ namespace TSysWatch.Controllers
         }
 
         /// <summary>
-        /// 测试删除条件API
+        /// 添加或更新配置API
         /// </summary>
-        /// <param name="driveLetter">驱动器字母</param>
-        /// <param name="filePath">测试文件路径</param>
-        /// <param name="startDeleteSizeGB">容量阈值</param>
-        /// <param name="startDeleteFileDays">时间阈值</param>
-        /// <param name="logicMode">逻辑模式</param>
+        /// <param name="request">配置请求</param>
         /// <returns></returns>
         [HttpPost]
-        //public IActionResult TestDeleteCondition([FromBody] TestConditionRequest request)
-        //{
-        //    try
-        //    {
-        //        if (!System.IO.File.Exists(request.FilePath))
-        //        {
-        //            return Json(new { success = false, message = "文件不存在" });
-        //        }
+        public IActionResult SaveConfig([FromBody] SaveDiskConfigRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.DriveLetter))
+                {
+                    return Json(new { success = false, message = "驱动器字母不能为空" });
+                }
 
-        //        var driveInfo = new DriveInfo(request.DriveLetter);
-        //        double currentFreeSpaceGB = driveInfo.AvailableFreeSpace / (1024.0 * 1024.0 * 1024.0);
+                if (request.DeleteDirectories == null || request.DeleteDirectories.Count == 0)
+                {
+                    return Json(new { success = false, message = "删除目录不能为空" });
+                }
 
-        //        var config = new DiskCleanupConfig
-        //        {
-        //            DriveLetter = request.DriveLetter,
-        //            StartDeleteSizeGB = request.StartDeleteSizeGB,
-        //            StartDeleteFileDays = request.StartDeleteFileDays,
-        //            LogicMode = Enum.Parse<DeleteLogicMode>(request.LogicMode, true)
-        //        };
-        //        // 
-        //        FileInfo fileInfo = new FileInfo(request.FilePath);
-        //        var deleteReason = AutoDeleteFileManager.ShouldDeleteFile(config, currentFreeSpaceGB, fileInfo);
-        //        var shouldDelete = deleteReason.CanDelete;
+                if (!Enum.TryParse<DeleteLogicMode>(request.LogicMode, true, out DeleteLogicMode logicMode))
+                {
+                    logicMode = DeleteLogicMode.OR;
+                }
 
-        //        // var fileInfo = new FileInfo(request.FilePath);
-        //        var fileAge = DateTime.Now - (fileInfo.CreationTime > fileInfo.LastWriteTime ? fileInfo.CreationTime : fileInfo.LastWriteTime);
+                AutoDeleteFileManager.AddOrUpdateConfig(
+                    request.DriveLetter,
+                    request.DeleteDirectories,
+                    request.StartDeleteSizeGB,
+                    request.StopDeleteSizeGB,
+                    request.StartDeleteFileDays,
+                    logicMode
+                );
 
-        //        // 检查各个条件
-        //        bool capacityCondition = currentFreeSpaceGB < request.StartDeleteSizeGB;
-        //        bool timeCondition = AutoDeleteFileManager.IsFileOlderThanDays(fileInfo, request.StartDeleteFileDays);
+                return Json(new { success = true, message = "配置保存成功" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
 
-        //        return Json(new
-        //        {
-        //            success = true,
-        //            shouldDelete = shouldDelete,
-        //            currentFreeSpaceGB = Math.Round(currentFreeSpaceGB, 2),
-        //            fileAge = fileAge.Days,
-        //            capacityCondition = capacityCondition,
-        //            timeCondition = timeCondition,
-        //            logicMode = request.LogicMode,
-        //            explanation = GetDeleteExplanation(capacityCondition, timeCondition, config.LogicMode, shouldDelete)
-        //        });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return Json(new { success = false, message = ex.Message });
-        //    }
-        //}
+        /// <summary>
+        /// 删除配置API
+        /// </summary>
+        /// <param name="driveLetter">驱动器字母</param>
+        /// <returns></returns>
+        [HttpPost]
+        public IActionResult DeleteConfig([FromBody] DeleteDiskConfigRequest request)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(request.DriveLetter))
+                {
+                    return Json(new { success = false, message = "驱动器字母不能为空" });
+                }
+
+                AutoDeleteFileManager.RemoveConfig(request.DriveLetter);
+                return Json(new { success = true, message = "配置删除成功" });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
 
         private string GetLogicModeDescription(DeleteLogicMode mode)
         {
@@ -146,6 +230,27 @@ namespace TSysWatch.Controllers
 
             return explanation;
         }
+    }
+
+    /// <summary>
+    /// 保存磁盘配置请求模型
+    /// </summary>
+    public class SaveDiskConfigRequest
+    {
+        public string DriveLetter { get; set; } = string.Empty;
+        public List<string> DeleteDirectories { get; set; } = new();
+        public double StartDeleteSizeGB { get; set; }
+        public double StopDeleteSizeGB { get; set; }
+        public int StartDeleteFileDays { get; set; }
+        public string LogicMode { get; set; } = "OR";
+    }
+
+    /// <summary>
+    /// 删除磁盘配置请求模型
+    /// </summary>
+    public class DeleteDiskConfigRequest
+    {
+        public string DriveLetter { get; set; } = string.Empty;
     }
 
     /// <summary>

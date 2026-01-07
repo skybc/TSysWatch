@@ -1,5 +1,5 @@
 @using TSysWatch
-@model List<DiskCleanupConfig>
+@model AutoDeleteFilePageViewModel
 @{
     ViewData["Title"] = "自动删除文件管理";
 }
@@ -7,14 +7,88 @@
 <h2>自动删除文件管理</h2>
 
 <div class="row">
-    <div class="col-md-6">
+    <div class="col-12 mb-4">
         <div class="card">
             <div class="card-header">
-                <h4>当前配置</h4>
+                <h4>添加/编辑配置</h4>
+            </div>
+            <div class="card-body">
+                <form id="configForm">
+                    <div class="row">
+                        <div class="col-md-2">
+                            <label class="form-label">驱动器字母 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="driveLetter" placeholder="C:" required>
+                            <small class="text-muted">例如: C:, D:, E:</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">删除目录 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="deleteDirectories" placeholder="C:\temp,C:\logs" required>
+                            <small class="text-muted">多个目录用逗号分隔</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">开始删除(GB) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="startDeleteSizeGB" value="5.0" step="0.1" required>
+                            <small class="text-muted">剩余空间阈值</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">停止删除(GB) <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="stopDeleteSizeGB" value="10.0" step="0.1" required>
+                            <small class="text-muted">停止删除阈值</small>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">时间阈值(天)</label>
+                            <input type="number" class="form-control" id="startDeleteFileDays" value="30" min="0">
+                            <small class="text-muted">0表示不限制</small>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-2">
+                            <label class="form-label">逻辑模式 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="logicMode">
+                                <option value="OR">OR (或)</option>
+                                <option value="AND">AND (且)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-10">
+                            <label class="form-label">&nbsp;</label>
+                            <div>
+                                <button type="button" class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+                                <button type="button" class="btn btn-secondary" onclick="resetForm()">重置</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="notificationArea"></div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>当前配置列表</h4>
             </div>
             <div class="card-body">
                 <div id="configList">
-                    <p class="text-muted">正在加载配置...</p>
+                    <partial name="_ConfigList" model="Model.Configs" />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h4>磁盘状态</h4>
+            </div>
+            <div class="card-body">
+                <div id="driveList">
+                    <partial name="_DrivesList" model="Model.Drives" />
                 </div>
             </div>
         </div>
@@ -23,83 +97,21 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-header">
-                <h4>磁盘状态</h4>
-            </div>
-            <div class="card-body">
-                <div id="driveList">
-                    <p class="text-muted">正在加载磁盘信息...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h4>删除条件测试工具</h4>
-            </div>
-            <div class="card-body">
-                <form id="testForm">
-                    <div class="row">
-                        <div class="col-md-3">
-                            <label>驱动器:</label>
-                            <select class="form-control" id="testDrive">
-                                <option value="C:">C:</option>
-                                <option value="D:">D:</option>
-                                <option value="E:">E:</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label>文件路径:</label>
-                            <input type="text" class="form-control" id="testFilePath" placeholder="例: C:\temp\test.txt">
-                        </div>
-                        <div class="col-md-2">
-                            <label>容量阈值(GB):</label>
-                            <input type="number" class="form-control" id="testSizeGB" value="10" step="0.1">
-                        </div>
-                        <div class="col-md-2">
-                            <label>时间阈值(天):</label>
-                            <input type="number" class="form-control" id="testDays" value="30">
-                        </div>
-                        <div class="col-md-2">
-                            <label>逻辑模式:</label>
-                            <select class="form-control" id="testLogic">
-                                <option value="OR">OR (或)</option>
-                                <option value="AND">AND (且)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="row mt-3">
-                        <div class="col-12">
-                            <button type="button" class="btn btn-primary" onclick="testDeleteCondition()">测试删除条件</button>
-                        </div>
-                    </div>
-                </form>
-                <div id="testResult" class="mt-3" style="display: none;">
-                    <div class="alert" id="testResultAlert">
-                        <div id="testResultContent"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
                 <h4>配置说明</h4>
             </div>
             <div class="card-body">
-                <h5>配置项说明：</h5>
-                <ul>
-                    <li><strong>StartDeleteSizeGB</strong>: 开始删除时的磁盘剩余空间阈值(GB)</li>
-                    <li><strong>StopDeleteSizeGB</strong>: 停止删除时的磁盘剩余空间阈值(GB)</li>
-                    <li><strong>StartDeleteFileDays</strong>: 开始删除文件时间阈值(天)，0表示不限制时间</li>
-                    <li><strong>LogicMode</strong>: 删除条件逻辑关系
+                <h6>配置文件格式：</h6>
+                <p><strong>配置存储位置</strong>: <code>config/AutoDeleteFile.json</code></p>
+                <p><strong>格式</strong>: JSON 格式，支持编辑器直接修改或通过本界面管理</p>
+
+                <h6>配置项说明：</h6>
+                <ul class="small">
+                    <li><strong>驱动器字母</strong>: 磁盘驱动器标识，如 C:, D:</li>
+                    <li><strong>删除目录</strong>: 多个目录用逗号分隔，例如: C:\temp,C:\logs</li>
+                    <li><strong>开始删除</strong>: 磁盘剩余空间低于此值时开始删除</li>
+                    <li><strong>停止删除</strong>: 磁盘剩余空间达到此值时停止删除</li>
+                    <li><strong>时间阈值</strong>: 只删除超过N天的文件，0表示不限制时间</li>
+                    <li><strong>逻辑模式</strong>:
                         <ul>
                             <li><strong>OR</strong>: 满足容量或时间条件之一即可删除</li>
                             <li><strong>AND</strong>: 必须同时满足容量和时间条件才删除</li>
@@ -107,93 +119,103 @@
                     </li>
                 </ul>
 
-                <h5>使用场景示例：</h5>
-                <ul>
-                    <li><strong>OR + 容量阈值</strong>: 磁盘空间不足时立即清理文件</li>
-                    <li><strong>OR + 时间阈值</strong>: 定期清理超过N天的旧文件</li>
-                    <li><strong>AND</strong>: 只有在磁盘空间不足且文件过旧的情况下才删除</li>
-                </ul>
+                <h6>删除记录：</h6>
+                <p>所有删除操作都会记录到 <code>wwwroot/record/auto_delete/yyyy/MM/yyyyMMdd.txt</code> 文件中</p>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+let editingDriveLetter = null;
+
 document.addEventListener('DOMContentLoaded', function() {
-    loadConfigs();
+    // 使用委托事件监听，处理编辑和删除按钮
+    document.addEventListener('click', function(event) {
+        const button = event.target;
+        
+        if (button.getAttribute('data-action') === 'edit') {
+            event.preventDefault();
+            editConfig(event);
+        } else if (button.getAttribute('data-action') === 'delete') {
+            event.preventDefault();
+            deleteConfigWithConfirm(event);
+        }
+    });
 });
 
-function loadConfigs() {
-    fetch('/AutoDelete/GetConfigs')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                displayConfigs(data.configs);
-                displayDrives(data.drives);
-            } else {
-                document.getElementById('configList').innerHTML = '<p class="text-danger">加载失败: ' + data.message + '</p>';
-            }
+/**
+ * 刷新配置和驱动器列表
+ */
+function refreshConfigs() {
+    refreshConfigsList();
+    refreshDrivesList();
+}
+
+/**
+ * 刷新配置列表
+ */
+function refreshConfigsList() {
+    fetch('/AutoDelete/GetConfigsHtml')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('configList').innerHTML = html;
         })
         .catch(error => {
             document.getElementById('configList').innerHTML = '<p class="text-danger">网络错误: ' + error.message + '</p>';
         });
 }
 
-function displayConfigs(configs) {
-    let html = '';
-    if (configs.length === 0) {
-        html = '<p class="text-muted">暂无配置</p>';
-    } else {
-        configs.forEach(config => {
-            html += `
-                <div class="mb-3 p-3 border rounded">
-                    <h6><strong>${config.driveLetter}</strong></h6>
-                    <p><strong>删除目录:</strong> ${config.deleteDirectories.join(', ')}</p>
-                    <p><strong>容量阈值:</strong> ${config.startDeleteSizeGB}GB - ${config.stopDeleteSizeGB}GB</p>
-                    <p><strong>时间阈值:</strong> ${config.startDeleteFileDays}天</p>
-                    <p><strong>逻辑模式:</strong> ${config.logicModeDescription}</p>
-                </div>
-            `;
+/**
+ * 刷新驱动器列表
+ */
+function refreshDrivesList() {
+    fetch('/AutoDelete/GetDrivesHtml')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('driveList').innerHTML = html;
+        })
+        .catch(error => {
+            document.getElementById('driveList').innerHTML = '<p class="text-danger">网络错误: ' + error.message + '</p>';
         });
-    }
-    document.getElementById('configList').innerHTML = html;
 }
 
-function displayDrives(drives) {
-    let html = '';
-    drives.forEach(drive => {
-        const freePercentage = Math.round((drive.freeSpaceGB / (drive.totalSize / (1024*1024*1024))) * 100);
-        const statusClass = freePercentage < 10 ? 'text-danger' : freePercentage < 25 ? 'text-warning' : 'text-success';
-        
-        html += `
-            <div class="mb-3 p-3 border rounded">
-                <h6><strong>${drive.driveLetter}</strong></h6>
-                <p><strong>总容量:</strong> ${drive.totalSize}</p>
-                <p><strong>剩余空间:</strong> <span class="${statusClass}">${drive.freeSpace} (${drive.freeSpaceGB}GB)</span></p>
-                <div class="progress">
-                    <div class="progress-bar ${statusClass.replace('text-', 'bg-')}" style="width: ${100-freePercentage}%"></div>
-                </div>
-            </div>
-        `;
-    });
-    document.getElementById('driveList').innerHTML = html;
-}
+/**
+ * 保存配置
+ */
+function saveConfig() {
+    const driveLetter = document.getElementById('driveLetter').value.trim();
+    const deleteDirectories = document.getElementById('deleteDirectories').value.trim();
+    const startDeleteSizeGB = parseFloat(document.getElementById('startDeleteSizeGB').value);
+    const stopDeleteSizeGB = parseFloat(document.getElementById('stopDeleteSizeGB').value);
+    const startDeleteFileDays = parseInt(document.getElementById('startDeleteFileDays').value);
+    const logicMode = document.getElementById('logicMode').value;
 
-function testDeleteCondition() {
-    const data = {
-        driveLetter: document.getElementById('testDrive').value,
-        filePath: document.getElementById('testFilePath').value,
-        startDeleteSizeGB: parseFloat(document.getElementById('testSizeGB').value),
-        startDeleteFileDays: parseInt(document.getElementById('testDays').value),
-        logicMode: document.getElementById('testLogic').value
-    };
-
-    if (!data.filePath) {
-        showTestResult('请输入文件路径', 'warning');
+    if (!driveLetter) {
+        showNotification('驱动器字母不能为空', 'warning');
         return;
     }
 
-    fetch('/AutoDelete/TestDeleteCondition', {
+    if (!deleteDirectories) {
+        showNotification('删除目录不能为空', 'warning');
+        return;
+    }
+
+    if (startDeleteSizeGB >= stopDeleteSizeGB) {
+        showNotification('开始删除大小必须小于停止删除大小', 'warning');
+        return;
+    }
+
+    const data = {
+        driveLetter: driveLetter,
+        deleteDirectories: deleteDirectories.split(',').map(d => d.trim()),
+        startDeleteSizeGB: startDeleteSizeGB,
+        stopDeleteSizeGB: stopDeleteSizeGB,
+        startDeleteFileDays: startDeleteFileDays,
+        logicMode: logicMode
+    };
+
+    fetch('/AutoDelete/SaveConfig', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -203,49 +225,148 @@ function testDeleteCondition() {
     .then(response => response.json())
     .then(result => {
         if (result.success) {
-            const alertType = result.shouldDelete ? 'danger' : 'success';
-            const content = `
-                <h6>测试结果: ${result.shouldDelete ? '会删除' : '不会删除'}</h6>
-                <p><strong>当前磁盘剩余空间:</strong> ${result.currentFreeSpaceGB}GB</p>
-                <p><strong>文件年龄:</strong> ${result.fileAge}天</p>
-                <p><strong>条件判断:</strong> ${result.explanation}</p>
-            `;
-            showTestResult(content, alertType);
+            showNotification(result.message || '配置保存成功', 'success');
+            resetForm();
+            refreshConfigs();
         } else {
-            showTestResult('测试失败: ' + result.message, 'warning');
+            showNotification(result.message || '保存失败', 'danger');
         }
     })
     .catch(error => {
-        showTestResult('网络错误: ' + error.message, 'danger');
+        showNotification('网络错误: ' + error.message, 'danger');
     });
 }
 
-function showTestResult(content, type) {
-    const resultDiv = document.getElementById('testResult');
-    const alertDiv = document.getElementById('testResultAlert');
-    const contentDiv = document.getElementById('testResultContent');
+/**
+ * 编辑配置
+ */
+function editConfig(event) {
+    const driveLetter = event.target.getAttribute('data-drive-letter');
     
-    alertDiv.className = `alert alert-${type}`;
-    contentDiv.innerHTML = content;
-    resultDiv.style.display = 'block';
+    fetch('/AutoDelete/GetConfigs')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const config = data.configs.find(c => c.driveLetter === driveLetter);
+                if (config) {
+                    editingDriveLetter = config.driveLetter;
+                    document.getElementById('driveLetter').value = config.driveLetter;
+                    document.getElementById('deleteDirectories').value = config.deleteDirectories.join(',');
+                    document.getElementById('startDeleteSizeGB').value = config.startDeleteSizeGB;
+                    document.getElementById('stopDeleteSizeGB').value = config.stopDeleteSizeGB;
+                    document.getElementById('startDeleteFileDays').value = config.startDeleteFileDays;
+                    document.getElementById('logicMode').value = config.logicMode;
+                    document.getElementById('driveLetter').disabled = true;
+                    document.querySelector('button[onclick="saveConfig()"]').textContent = '更新配置';
+                    window.scrollTo(0, 0);
+                }
+            }
+        })
+        .catch(error => {
+            showNotification('加载配置失败: ' + error.message, 'danger');
+        });
+}
+
+/**
+ * 删除配置（带确认）
+ */
+function deleteConfigWithConfirm(event) {
+    const driveLetter = event.target.getAttribute('data-drive-letter');
+    
+    if (!confirm(`确定要删除驱动器 ${driveLetter} 的配置吗？`)) {
+        return;
+    }
+
+    const data = { driveLetter: driveLetter };
+
+    fetch('/AutoDelete/DeleteConfig', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showNotification(result.message, 'success');
+            refreshConfigs();
+        } else {
+            showNotification('删除失败: ' + result.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showNotification('网络错误: ' + error.message, 'danger');
+    });
+}
+
+/**
+ * 重置表单
+ */
+function resetForm() {
+    editingDriveLetter = null;
+    document.getElementById('configForm').reset();
+    document.getElementById('driveLetter').disabled = false;
+    document.querySelector('button[onclick="saveConfig()"]').textContent = '保存配置';
+}
+
+/**
+ * 显示通知
+ */
+function showNotification(message, type) {
+    const notificationArea = document.getElementById('notificationArea');
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+    notificationArea.innerHTML = '';
+    notificationArea.appendChild(alertDiv);
+    
+    // 3秒后自动隐藏
+    setTimeout(() => {
+        alertDiv.remove();
+    }, 3000);
 }
 </script>
 
 <style>
 .card {
     margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.card-header h4 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.table-responsive {
+    margin-top: 10px;
+}
+
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.badge-info {
+    background-color: #17a2b8;
+}
+
+.badge-warning {
+    background-color: #ffc107;
+    color: #212529;
 }
 
 .progress {
-    height: 10px;
+    background-color: #e9ecef;
 }
 
-.form-control {
-    margin-bottom: 10px;
-}
-
-#testResult {
-    max-height: 200px;
-    overflow-y: auto;
+.btn {
+    margin-right: 5px;
 }
 </style>

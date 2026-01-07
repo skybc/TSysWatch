@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using static TSysWatch.AutoDeleteFile;
 
 namespace TSysWatch
@@ -12,10 +13,11 @@ namespace TSysWatch
     /// </summary>
     public static class AutoDeleteFileManager
     {
-        private static readonly string ConfigFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoDeleteFile.ini");
+        private static readonly string ConfigDirPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
+        private static readonly string ConfigFilePath = Path.Combine(ConfigDirPath, "AutoDeleteFile.json");
 
         /// <summary>
-        /// 获取当前配置
+        /// 从JSON文件获取当前配置
         /// </summary>
         /// <returns>配置列表</returns>
         public static List<DiskCleanupConfig> GetCurrentConfigs()
@@ -30,65 +32,11 @@ namespace TSysWatch
                     return configs;
                 }
 
-                var lines = File.ReadAllLines(ConfigFilePath, Encoding.UTF8);
-                DiskCleanupConfig currentConfig = null;
+                var json = File.ReadAllText(ConfigFilePath);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                configs = JsonSerializer.Deserialize<List<DiskCleanupConfig>>(json, options) ?? new List<DiskCleanupConfig>();
 
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#") || trimmedLine.StartsWith(";"))
-                        continue;
-
-                    if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                    {
-                        if (currentConfig != null)
-                        {
-                            configs.Add(currentConfig);
-                        }
-                        currentConfig = new DiskCleanupConfig
-                        {
-                            DriveLetter = trimmedLine.Substring(1, trimmedLine.Length - 2)
-                        };
-                    }
-                    else if (currentConfig != null && trimmedLine.Contains("="))
-                    {
-                        var parts = trimmedLine.Split('=', 2);
-                        if (parts.Length == 2)
-                        {
-                            var key = parts[0].Trim().ToLower();
-                            var value = parts[1].Trim();
-
-                            switch (key)
-                            {
-                                case "deletedirectories":
-                                    currentConfig.DeleteDirectories = value.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                                        .Select(d => d.Trim()).ToList();
-                                    break;
-                                case "startdeletesizegb":
-                                    if (double.TryParse(value, out double startSize))
-                                        currentConfig.StartDeleteSizeGB = startSize;
-                                    break;
-                                case "stopdeletesizegb":
-                                    if (double.TryParse(value, out double stopSize))
-                                        currentConfig.StopDeleteSizeGB = stopSize;
-                                    break;
-                                case "startdeletefiledays":
-                                    if (int.TryParse(value, out int fileDays))
-                                        currentConfig.StartDeleteFileDays = fileDays;
-                                    break;
-                                case "logicmode":
-                                    if (Enum.TryParse<DeleteLogicMode>(value, true, out DeleteLogicMode mode))
-                                        currentConfig.LogicMode = mode;
-                                    break;
-                            }
-                        }
-                    }
-                }
-
-                if (currentConfig != null)
-                {
-                    configs.Add(currentConfig);
-                }
+                LogHelper.Logger.Information($"读取配置文件成功，共{configs.Count}个磁盘配置");
             }
             catch (Exception ex)
             {
@@ -99,35 +47,40 @@ namespace TSysWatch
         }
 
         /// <summary>
-        /// 保存配置
+        /// 确保配置目录存在
+        /// </summary>
+        private static void EnsureConfigDirectory()
+        {
+            try
+            {
+                if (!Directory.Exists(ConfigDirPath))
+                {
+                    Directory.CreateDirectory(ConfigDirPath);
+                    LogHelper.Logger.Information($"创建配置目录：{ConfigDirPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Logger.Error($"创建配置目录异常：{ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 保存配置到JSON文件
         /// </summary>
         /// <param name="configs">配置列表</param>
         public static void SaveConfigs(List<DiskCleanupConfig> configs)
         {
             try
             {
-                var sb = new StringBuilder();
-                sb.AppendLine("# 自动删除文件配置");
-                sb.AppendLine("# 格式：[磁盘驱动器]");
-                sb.AppendLine("# DeleteDirectories=目录1,目录2,目录3");
-                sb.AppendLine("# StartDeleteSizeGB=开始删除时的磁盘剩余空间(GB)");
-                sb.AppendLine("# StopDeleteSizeGB=停止删除时的磁盘剩余空间(GB)");
-                sb.AppendLine("# StartDeleteFileDays=开始删除文件时间(天) - 只删除超过N天的文件，0表示不限制时间");
-                sb.AppendLine("# LogicMode=删除条件逻辑关系 - AND(且)/OR(或)，AND表示同时满足容量和时间条件，OR表示满足任一条件");
-                sb.AppendLine();
-
-                foreach (var config in configs)
-                {
-                    sb.AppendLine($"[{config.DriveLetter}]");
-                    sb.AppendLine($"DeleteDirectories={string.Join(",", config.DeleteDirectories)}");
-                    sb.AppendLine($"StartDeleteSizeGB={config.StartDeleteSizeGB}");
-                    sb.AppendLine($"StopDeleteSizeGB={config.StopDeleteSizeGB}");
-                    sb.AppendLine($"StartDeleteFileDays={config.StartDeleteFileDays}");
-                    sb.AppendLine($"LogicMode={config.LogicMode}");
-                    sb.AppendLine();
-                }
-
-                File.WriteAllText(ConfigFilePath, sb.ToString(), Encoding.UTF8);
+                EnsureConfigDirectory();
+                var options = new JsonSerializerOptions 
+                { 
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                };
+                var json = JsonSerializer.Serialize(configs, options);
+                File.WriteAllText(ConfigFilePath, json, System.Text.Encoding.UTF8);
                 LogHelper.Logger.Information("配置保存成功");
             }
             catch (Exception ex)

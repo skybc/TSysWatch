@@ -1,0 +1,282 @@
+@using TSysWatch
+@model AutoCopyFilePageViewModel
+@{
+    ViewData["Title"] = "自动拷贝文件管理";
+}
+
+<h2>自动拷贝文件管理</h2>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>添加/编辑拷贝任务</h4>
+            </div>
+            <div class="card-body">
+                <form id="configForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="sourceDir">源目录 <span class="text-danger">*</span>:</label>
+                            <input type="text" class="form-control" id="sourceDir" placeholder="例: D:\Pictures" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="targetDrive">目标磁盘 <span class="text-danger">*</span>:</label>
+                            <select class="form-control" id="targetDrive" required>
+                                <option value="">-- 请选择目标磁盘 --</option>
+                                @foreach (var drive in Model.AvailableDrives)
+                                {
+                                    <option value="@drive.Name">@drive.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <label for="movedDir">已拷贝文件目录 (可选):</label>
+                            <input type="text" class="form-control" id="movedDir" placeholder="例: D:\Pictures_Processed">
+                            <small class="text-muted">拷贝完成后将源文件移动到此目录。如果不设置则删除源文件</small>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button type="button" class="btn btn-primary" onclick="saveConfig()">添加/更新配置</button>
+                        </div>
+                    </div>
+                </form>
+                <div id="saveMessage" class="mt-3" style="display: none;">
+                    <div class="alert" id="saveAlert" role="alert"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4>当前拷贝配置</h4>
+                <button class="btn btn-sm btn-info" onclick="refreshConfigs()">刷新</button>
+            </div>
+            <div class="card-body">
+                <div id="configList">
+                    <partial name="_ConfigList" model="Model.Configs" />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>功能说明</h4>
+            </div>
+            <div class="card-body">
+                <h5>配置文件格式</h5>
+                <p><strong>配置存储位置</strong>: <code>config/AutoCopyFile.json</code></p>
+                <p><strong>格式</strong>: JSON 格式，支持编辑器直接修改或通过本界面管理</p>
+
+                <h5>支持的图片格式</h5>
+                <p>.jpg, .jpeg, .png, .bmp, .gif, .tiff, .tif, .webp, .ico</p>
+
+                <h5>已拷贝文件处理方式</h5>
+                <ul>
+                    <li><strong>配置了移动目录</strong>: 拷贝完成后将源文件移动到指定目录</li>
+                    <li><strong>未配置移动目录</strong>: 拷贝完成后删除源文件</li>
+                </ul>
+
+                <h5>使用场景</h5>
+                <ul>
+                    <li><strong>图片备份</strong>: 自动备份照片到外部存储或网络位置</li>
+                    <li><strong>文件同步</strong>: 定期同步重要文件到多个位置</li>
+                    <li><strong>档案归档</strong>: 拷贝历史文件到归档位置，同时清理源目录</li>
+                </ul>
+
+                <h5>配置建议</h5>
+                <ul>
+                    <li><strong>源目录</strong>: 支持本地路径（如 <code>D:\Pictures</code>）和网络路径（如 <code>\\server\photos</code>）</li>
+                    <li><strong>目标磁盘</strong>: 必须与源目录在不同磁盘，格式如 <code>E:</code>、<code>F:</code></li>
+                    <li><strong>目录权限</strong>: 确保应用有权限读取源目录和写入目标磁盘</li>
+                    <li><strong>多任务</strong>: 支持配置多个拷贝任务</li>
+                </ul>
+
+                <h5>拷贝记录</h5>
+                <p>所有拷贝操作都会记录到 <code>record/AutoCopyFile/yyyyMMdd.csv</code> 文件中</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let editingSourceDir = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 使用委托事件监听，处理编辑和删除按钮
+    document.addEventListener('click', function(event) {
+        const button = event.target;
+        
+        if (button.getAttribute('data-action') === 'edit') {
+            event.preventDefault();
+            editConfig(event);
+        } else if (button.getAttribute('data-action') === 'delete') {
+            event.preventDefault();
+            deleteConfigWithConfirm(event);
+        }
+    });
+});
+
+/**
+ * 保存配置
+ */
+function saveConfig() {
+    const sourceDir = document.getElementById('sourceDir').value.trim();
+    const targetDrive = document.getElementById('targetDrive').value.trim();
+    const movedDir = document.getElementById('movedDir').value.trim() || null;
+
+    if (!sourceDir) {
+        showSaveMessage('源目录不能为空', 'warning');
+        return;
+    }
+
+    if (!targetDrive) {
+        showSaveMessage('目标磁盘不能为空', 'warning');
+        return;
+    }
+
+    const data = {
+        sourceDirectory: sourceDir,
+        targetDrive: targetDrive,
+        movedDirectory: movedDir
+    };
+
+    fetch('/AutoCopyFile/SaveConfig', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showSaveMessage(result.message || '配置保存成功', 'success');
+            document.getElementById('configForm').reset();
+            document.getElementById('movedDir').value = '';
+            refreshConfigs();
+        } else {
+            showSaveMessage('保存失败: ' + (result.message || '未知错误'), 'danger');
+        }
+    })
+    .catch(error => {
+        showSaveMessage('网络错误: ' + error.message, 'danger');
+    });
+}
+
+/**
+ * 刷新配置列表
+ */
+function refreshConfigs() {
+    fetch('/AutoCopyFile/GetConfigsHtml')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('configList').innerHTML = html;
+        })
+        .catch(error => {
+            document.getElementById('configList').innerHTML = '<p class="text-danger">网络错误: ' + error.message + '</p>';
+        });
+}
+
+/**
+ * 编辑配置
+ */
+function editConfig(event) {
+    const sourceDir = event.target.getAttribute('data-source-dir');
+    
+    fetch('/AutoCopyFile/GetConfigs')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const config = data.configs.find(c => c.sourceDirectory === sourceDir);
+                if (config) {
+                    editingSourceDir = config.sourceDirectory;
+                    document.getElementById('sourceDir').value = config.sourceDirectory;
+                    document.getElementById('targetDrive').value = config.targetDrive;
+                    document.getElementById('movedDir').value = config.movedDirectory || '';
+                    document.getElementById('sourceDir').disabled = true;
+                    document.querySelector('button[onclick="saveConfig()"]').textContent = '更新配置';
+                    window.scrollTo(0, 0);
+                }
+            }
+        })
+        .catch(error => {
+            showSaveMessage('加载配置失败: ' + error.message, 'danger');
+        });
+}
+
+/**
+ * 删除配置（带确认）
+ */
+function deleteConfigWithConfirm(event) {
+    const sourceDir = event.target.getAttribute('data-source-dir');
+    
+    if (!confirm(`确定要删除源目录为 "${sourceDir}" 的配置吗？`)) {
+        return;
+    }
+
+    const data = { sourceDirectory: sourceDir };
+
+    fetch('/AutoCopyFile/DeleteConfig', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showSaveMessage(result.message || '配置删除成功', 'success');
+            refreshConfigs();
+        } else {
+            showSaveMessage('删除失败: ' + (result.message || '未知错误'), 'danger');
+        }
+    })
+    .catch(error => {
+        showSaveMessage('网络错误: ' + error.message, 'danger');
+    });
+}
+
+/**
+ * 显示消息提示
+ */
+function showSaveMessage(message, type) {
+    const messageDiv = document.getElementById('saveMessage');
+    const alertDiv = document.getElementById('saveAlert');
+    
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.textContent = message;
+    messageDiv.style.display = 'block';
+    
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 5000);
+}
+</script>
+
+<style>
+.card {
+    margin-bottom: 20px;
+}
+
+.form-control {
+    margin-bottom: 10px;
+}
+
+code {
+    background-color: #f0f0f0;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+</style>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace TSysWatch
@@ -17,9 +18,10 @@ namespace TSysWatch
         public string SourceDirectory { get; set; } = "";
         
         /// <summary>
-        /// 目标目录
+        /// 目标磁盘（如 D:、E: 等）
+        /// 文件会保持相对路径结构拷贝到目标磁盘
         /// </summary>
-        public string TargetDirectory { get; set; } = "";
+        public string TargetDrive { get; set; } = "";
         
         /// <summary>
         /// 已拷贝文件移动目录（可选，如果设置则将已拷贝的文件移动到此目录）
@@ -29,7 +31,8 @@ namespace TSysWatch
 
     public class AutoCopyFile
     {
-        private static readonly string ConfigFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoCopyFile.ini");
+        private static readonly string ConfigDirPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
+        private static readonly string ConfigFilePath = Path.Combine(ConfigDirPath, "AutoCopyFile.json");
         private static List<AutoCopyConfig> _configs = new List<AutoCopyConfig>();
 
         /// <summary>
@@ -46,20 +49,31 @@ namespace TSysWatch
         /// </summary>
         private static void Run()
         {
+            List<AutoCopyConfig> configCache = null;
+            int configCheckInterval = 0;
+            const int configCheckFrequency = 2; // 每2次循环检查一次配置（约20秒）
+            
             while (true)
             {
                 try
                 {
-                    // 读取配置文件
-                    ReadIniFile();
-
-                    // 执行每个配置的拷贝任务
-                    foreach (var config in _configs)
+                    // 定期重新读取配置
+                    if (configCheckInterval++ >= configCheckFrequency)
                     {
-                        ExecuteCopyTask(config);
+                        ReadJsonFile();
+                        configCache = _configs;
+                        configCheckInterval = 0;
                     }
 
-                    LogHelper.Logger.Information("自动拷贝文件任务完成");
+                    // 执行每个配置的拷贝任务
+                    if (configCache != null && configCache.Count > 0)
+                    {
+                        foreach (var config in configCache)
+                        {
+                            ExecuteCopyTask(config);
+                        }
+                        LogHelper.Logger.Information("自动拷贝文件任务完成");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -73,66 +87,23 @@ namespace TSysWatch
         }
 
         /// <summary>
-        /// 读取INI配置文件
+        /// 读取JSON配置文件
         /// </summary>
-        private static void ReadIniFile()
+        private static void ReadJsonFile()
         {
             try
             {
+                EnsureConfigDirectory();
                 if (!File.Exists(ConfigFilePath))
                 {
-                    CreateDefaultIniFile();
+                    CreateDefaultJsonFile();
                     return;
                 }
 
                 _configs.Clear();
-                var lines = File.ReadAllLines(ConfigFilePath, Encoding.UTF8);
-                AutoCopyConfig currentConfig = null;
-
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#") || trimmedLine.StartsWith(";"))
-                        continue;
-
-                    if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                    {
-                        // 新的拷贝配置节
-                        if (currentConfig != null)
-                        {
-                            _configs.Add(currentConfig);
-                        }
-                        currentConfig = new AutoCopyConfig();
-                    }
-                    else if (currentConfig != null && trimmedLine.Contains("="))
-                    {
-                        var parts = trimmedLine.Split('=', 2);
-                        if (parts.Length == 2)
-                        {
-                            var key = parts[0].Trim().ToLower();
-                            var value = parts[1].Trim();
-
-                            switch (key)
-                            {
-                                case "sourcedirectory":
-                                    currentConfig.SourceDirectory = value;
-                                    break;
-                                case "targetdirectory":
-                                    currentConfig.TargetDirectory = value;
-                                    break;
-                                case "moveddirectory":
-                                    currentConfig.MovedDirectory = value;
-                                    break;
-                            }
-                        }
-                    }
-                }
-
-                // 添加最后一个配置
-                if (currentConfig != null)
-                {
-                    _configs.Add(currentConfig);
-                }
+                var json = File.ReadAllText(ConfigFilePath);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                _configs = JsonSerializer.Deserialize<List<AutoCopyConfig>>(json, options) ?? new List<AutoCopyConfig>();
 
                 LogHelper.Logger.Information($"读取拷贝配置文件成功，共{_configs.Count}个配置");
             }
@@ -142,32 +113,49 @@ namespace TSysWatch
             }
         }
 
-        /// <summary>
-        /// 创建默认配置文件
+        /// <summary>        /// 确保配置目录存在
         /// </summary>
-        private static void CreateDefaultIniFile()
+        private static void EnsureConfigDirectory()
         {
             try
             {
-                var defaultContent = @"# 自动拷贝文件配置
-# 支持配置多个拷贝任务，每个任务使用[CopyTask]开始
+                if (!Directory.Exists(ConfigDirPath))
+                {
+                    Directory.CreateDirectory(ConfigDirPath);
+                    LogHelper.Logger.Information($"创建配置目录：{ConfigDirPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Logger.Error($"创建配置目录异常：{ex.Message}", ex);
+            }
+        }
 
-[CopyTask]
-# 源目录 - 要拷贝的图片文件所在目录
-SourceDirectory=D:\Photos
-# 目标目录 - 拷贝到的目标目录
-TargetDirectory=E:\Backup\Photos
-# 已拷贝文件移动目录 - 拷贝完成后将源文件移动到此目录（可选）
-MovedDirectory=D:\Photos_Processed
+        /// <summary>
+        /// 创建默认配置文件
+        /// </summary>
+        private static void CreateDefaultJsonFile()
+        {
+            try
+            {
+                EnsureConfigDirectory();
+                var defaultConfigs = new List<AutoCopyConfig>
+                {
+                    new AutoCopyConfig
+                    {
+                        SourceDirectory = "D:\\Photos",
+                        TargetDrive = "E:",
+                        MovedDirectory = "D:\\Photos_Processed"
+                    }
+                };
 
-# 可以添加更多拷贝任务
-#[CopyTask]
-#SourceDirectory=C:\Images
-#TargetDirectory=D:\Backup\Images
-#MovedDirectory=C:\Images_Processed
-";
-
-                File.WriteAllText(ConfigFilePath, defaultContent, Encoding.UTF8);
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                };
+                var json = JsonSerializer.Serialize(defaultConfigs, options);
+                File.WriteAllText(ConfigFilePath, json, Encoding.UTF8);
                 LogHelper.Logger.Information($"创建默认拷贝配置文件：{ConfigFilePath}");
             }
             catch (Exception ex)
@@ -184,7 +172,7 @@ MovedDirectory=D:\Photos_Processed
         {
             try
             {
-                if (string.IsNullOrEmpty(config.SourceDirectory) || string.IsNullOrEmpty(config.TargetDirectory))
+                if (string.IsNullOrEmpty(config.SourceDirectory) || string.IsNullOrEmpty(config.TargetDrive))
                 {
                     LogHelper.Logger.Warning("拷贝配置不完整，跳过该任务");
                     return;
@@ -196,37 +184,69 @@ MovedDirectory=D:\Photos_Processed
                     return;
                 }
 
-                // 确保目标目录存在
-                if (!Directory.Exists(config.TargetDirectory))
+                // 验证源目录和目标磁盘不在同一磁盘
+                string sourceDrive = Path.GetPathRoot(config.SourceDirectory)?.TrimEnd('\\') ?? "";
+                if (sourceDrive.Equals(config.TargetDrive, StringComparison.OrdinalIgnoreCase))
                 {
-                    Directory.CreateDirectory(config.TargetDirectory);
-                    LogHelper.Logger.Information($"创建目标目录：{config.TargetDirectory}");
+                    LogHelper.Logger.Warning($"源目录磁盘 {sourceDrive} 与目标磁盘 {config.TargetDrive} 相同，跳过该任务");
+                    return;
                 }
 
-                // 如果配置了MovedDirectory，确保该目录存在
-                if (!string.IsNullOrEmpty(config.MovedDirectory) && !Directory.Exists(config.MovedDirectory))
+                // 验证目标磁盘存在
+                if (!DriveInfo.GetDrives().Any(d => d.Name.TrimEnd('\\').Equals(config.TargetDrive, StringComparison.OrdinalIgnoreCase)))
                 {
-                    Directory.CreateDirectory(config.MovedDirectory);
-                    LogHelper.Logger.Information($"创建已处理文件目录：{config.MovedDirectory}");
+                    LogHelper.Logger.Warning($"目标磁盘不存在：{config.TargetDrive}");
+                    return;
                 }
 
-                // 创建当日记录文件路径
-                var dailyRecordPath = GetDailyRecordPath(config.SourceDirectory);
-                InitializeDailyRecord(dailyRecordPath);
+                // 创建记录文件路径
+                var recordPath = GetCopyRecordPath();
+                InitializeCopyRecord(recordPath);
 
                 // 获取所有图片文件
                 var imageFiles = GetImageFiles(config.SourceDirectory);
 
                 int copiedCount = 0;
+                long totalCopiedSize = 0;
+
                 foreach (var imageFile in imageFiles)
                 {
-                    if (CopyAndMoveImageFile(imageFile, config.SourceDirectory, config.TargetDirectory, config.MovedDirectory, dailyRecordPath))
+                    try
                     {
-                        copiedCount++;
+                        var result = CopyImageFileWithStructure(imageFile, config.SourceDirectory, config.TargetDrive, recordPath);
+                        if (result.success)
+                        {
+                            copiedCount++;
+                            totalCopiedSize += result.fileSize;
+
+                            // 如果配置了MovedDirectory，移动源文件
+                            if (!string.IsNullOrEmpty(config.MovedDirectory))
+                            {
+                                try
+                                {
+                                    if (!Directory.Exists(config.MovedDirectory))
+                                    {
+                                        Directory.CreateDirectory(config.MovedDirectory);
+                                    }
+
+                                    string movedFilePath = Path.Combine(config.MovedDirectory, Path.GetFileName(imageFile));
+                                    File.Move(imageFile, movedFilePath, true);
+                                    LogHelper.Logger.Information($"源文件已移动：{imageFile} -> {movedFilePath}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    LogHelper.Logger.Error($"移动源文件失败：{imageFile}，错误：{ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Logger.Error($"处理文件异常：{imageFile}，错误：{ex.Message}");
                     }
                 }
 
-                LogHelper.Logger.Information($"拷贝任务完成，从 {config.SourceDirectory} 到 {config.TargetDirectory}，共拷贝 {copiedCount} 个文件");
+                LogHelper.Logger.Information($"拷贝任务完成，从 {config.SourceDirectory} 到 {config.TargetDrive}，共拷贝 {copiedCount} 个文件，总大小 {totalCopiedSize / (1024.0 * 1024.0):F2}MB");
             }
             catch (Exception ex)
             {
@@ -272,191 +292,104 @@ MovedDirectory=D:\Photos_Processed
         }
 
         /// <summary>
-        /// 获取当日记录文件路径
+        /// 获取拷贝记录文件路径（CSV格式）
         /// </summary>
-        /// <param name="sourceDirectory">源目录</param>
-        /// <returns>当日记录文件路径</returns>
-        private static string GetDailyRecordPath(string sourceDirectory)
+        /// <returns>记录文件路径</returns>
+        private static string GetCopyRecordPath()
         {
-            var today = DateTime.Now.ToString("yyyyMMdd");
-            return Path.Combine(sourceDirectory, $"拷贝记录_{today}.txt");
+            string recordDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "record", "AutoCopyFile");
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            return Path.Combine(recordDir, $"{today}.csv");
         }
 
         /// <summary>
-        /// 初始化当日记录文件
+        /// 初始化拷贝记录文件
         /// </summary>
         /// <param name="recordPath">记录文件路径</param>
-        private static void InitializeDailyRecord(string recordPath)
+        private static void InitializeCopyRecord(string recordPath)
         {
             try
             {
+                string recordDir = Path.GetDirectoryName(recordPath) ?? "";
+                if (!Directory.Exists(recordDir))
+                {
+                    Directory.CreateDirectory(recordDir);
+                }
+
                 if (!File.Exists(recordPath))
                 {
-                    var header = "时间,操作类型,源文件路径,目标文件路径,文件大小(字节),状态" + Environment.NewLine;
+                    var header = "时间,源文件,目标文件,文件大小(字节),状态" + Environment.NewLine;
                     File.WriteAllText(recordPath, header, Encoding.UTF8);
-                    LogHelper.Logger.Information($"创建当日记录文件：{recordPath}");
+                    LogHelper.Logger.Information($"创建拷贝记录文件：{recordPath}");
                 }
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"初始化当日记录文件异常：{ex.Message}", ex);
+                LogHelper.Logger.Error($"初始化拷贝记录文件异常：{ex.Message}", ex);
             }
         }
 
         /// <summary>
-        /// 写入操作记录
+        /// 拷贝图片文件并保持目录结构
         /// </summary>
+        /// <param name="sourceFilePath">源文件路径</param>
+        /// <param name="sourceRootDirectory">源根目录</param>
+        /// <param name="targetDrive">目标磁盘</param>
         /// <param name="recordPath">记录文件路径</param>
-        /// <param name="operationType">操作类型</param>
-        /// <param name="sourceFile">源文件路径</param>
-        /// <param name="targetFile">目标文件路径</param>
-        /// <param name="fileSize">文件大小</param>
-        /// <param name="status">操作状态</param>
-        private static void WriteOperationRecord(string recordPath, string operationType, string sourceFile, string targetFile, long fileSize, string status)
+        /// <returns>拷贝结果</returns>
+        private static (bool success, long fileSize) CopyImageFileWithStructure(string sourceFilePath, string sourceRootDirectory, string targetDrive, string recordPath)
         {
             try
             {
-                var record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},{operationType},\"{sourceFile}\",\"{targetFile}\",{fileSize},{status}";
-                File.AppendAllText(recordPath, record + Environment.NewLine, Encoding.UTF8);
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Logger.Error($"写入操作记录异常：{ex.Message}", ex);
-            }
-        }
-
-        /// <summary>
-        /// 拷贝图片文件并移动源文件
-        /// </summary>
-        /// <param name="sourceFile">源文件路径</param>
-        /// <param name="sourceRoot">源根目录</param>
-        /// <param name="targetRoot">目标根目录</param>
-        /// <param name="movedRoot">已处理文件移动目录（可选）</param>
-        /// <param name="recordPath">记录文件路径</param>
-        /// <returns>是否处理成功</returns>
-        private static bool CopyAndMoveImageFile(string sourceFile, string sourceRoot, string targetRoot, string? movedRoot, string recordPath)
-        {
-            try
-            {
-                // 计算相对路径，保持目录结构
-                var relativePath = Path.GetRelativePath(sourceRoot, sourceFile);
-                var targetFile = Path.Combine(targetRoot, relativePath);
-                var targetDir = Path.GetDirectoryName(targetFile);
-                var fileInfo = new FileInfo(sourceFile);
+                // 获取源目录的完整路径名（不含盘符）
+                // 例如：D:\Apache24\icons -> \Apache24\icons
+                string sourcePath = Path.GetFullPath(sourceRootDirectory);
+                string sourcePathWithoutDrive = sourcePath.Substring(2); // 移除盘符和冒号 (D:)
+                
+                // 计算相对路径（源文件相对于源根目录）
+                string relativePath = Path.GetRelativePath(sourceRootDirectory, sourceFilePath);
+                
+                // 构建目标路径：目标盘符 + 源目录结构 + 相对路径
+                string targetFilePath = Path.Combine(targetDrive, sourcePathWithoutDrive.TrimStart('\\'), relativePath);
+                string targetDir = Path.GetDirectoryName(targetFilePath) ?? "";
 
                 // 确保目标目录存在
-                if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
+                if (!Directory.Exists(targetDir))
                 {
                     Directory.CreateDirectory(targetDir);
                 }
 
-                // 如果目标文件已存在，比较文件大小和修改时间
-                if (File.Exists(targetFile))
-                {
-                    var targetInfo = new FileInfo(targetFile);
+                // 拷贝文件
+                var fileInfo = new FileInfo(sourceFilePath);
+                File.Copy(sourceFilePath, targetFilePath, true);
 
-                    if (fileInfo.Length == targetInfo.Length &&
-                        fileInfo.LastWriteTime <= targetInfo.LastWriteTime)
-                    {
-                        // 文件相同，记录跳过操作
-                        WriteOperationRecord(recordPath, "跳过拷贝", sourceFile, targetFile, fileInfo.Length, "文件已存在且相同");
-                        
-                        // 直接移动源文件到已处理目录（如果配置了的话）
-                        MoveSourceFileToProcessed(sourceFile, sourceRoot, movedRoot, recordPath, fileInfo.Length);
-                        LogHelper.Logger.Information($"文件已存在且相同，移动源文件：{relativePath}");
-                        return true;
-                    }
-                }
+                // 记录到CSV
+                WriteCopyRecord(recordPath, sourceFilePath, targetFilePath, fileInfo.Length, "成功");
 
-                // 执行拷贝
-                File.Copy(sourceFile, targetFile, true);
-                LogHelper.Logger.Information($"拷贝文件：{relativePath}");
-                
-                // 记录拷贝操作
-                WriteOperationRecord(recordPath, "拷贝", sourceFile, targetFile, fileInfo.Length, "成功");
-
-                // 拷贝成功后，移动源文件到已处理目录
-                MoveSourceFileToProcessed(sourceFile, sourceRoot, movedRoot, recordPath, fileInfo.Length);
-
-                return true;
+                LogHelper.Logger.Information($"文件拷贝成功：{sourceFilePath} -> {targetFilePath}");
+                return (true, fileInfo.Length);
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"处理文件异常 {sourceFile}：{ex.Message}", ex);
-                
-                // 记录失败操作
-                try
-                {
-                    var fileInfo = new FileInfo(sourceFile);
-                    WriteOperationRecord(recordPath, "拷贝", sourceFile, "N/A", fileInfo.Length, $"失败：{ex.Message}");
-                }
-                catch { }
-                
-                return false;
+                WriteCopyRecord(recordPath, sourceFilePath, "", 0, $"失败：{ex.Message}");
+                LogHelper.Logger.Error($"拷贝文件失败：{sourceFilePath}，错误：{ex.Message}");
+                return (false, 0);
             }
         }
 
         /// <summary>
-        /// 将源文件移动到已处理目录
+        /// 写入拷贝记录
         /// </summary>
-        /// <param name="sourceFile">源文件路径</param>
-        /// <param name="sourceRoot">源根目录</param>
-        /// <param name="movedRoot">已处理文件移动目录</param>
-        /// <param name="recordPath">记录文件路径</param>
-        /// <param name="fileSize">文件大小</param>
-        private static void MoveSourceFileToProcessed(string sourceFile, string sourceRoot, string? movedRoot, string recordPath, long fileSize)
+        private static void WriteCopyRecord(string recordPath, string sourceFile, string targetFile, long fileSize, string status)
         {
             try
             {
-                var relativePath = Path.GetRelativePath(sourceRoot, sourceFile);
-                
-                // 如果没有配置移动目录，则删除源文件
-                if (string.IsNullOrEmpty(movedRoot))
-                {
-                    File.Delete(sourceFile);
-                    WriteOperationRecord(recordPath, "删除", sourceFile, "N/A", fileSize, "成功");
-                    LogHelper.Logger.Information($"删除已处理的源文件：{relativePath}");
-                    return;
-                }
-
-                // 计算在已处理目录中的路径
-                var movedFile = Path.Combine(movedRoot, relativePath);
-                var movedDir = Path.GetDirectoryName(movedFile);
-
-                // 确保移动目标目录存在
-                if (!string.IsNullOrEmpty(movedDir) && !Directory.Exists(movedDir))
-                {
-                    Directory.CreateDirectory(movedDir);
-                }
-
-                // 如果目标文件已存在，删除它（或者可以重命名）
-                if (File.Exists(movedFile))
-                {
-                    File.Delete(movedFile);
-                }
-
-                // 移动文件
-                File.Move(sourceFile, movedFile);
-                WriteOperationRecord(recordPath, "移动", sourceFile, movedFile, fileSize, "成功");
-                LogHelper.Logger.Information($"移动已处理文件：{relativePath} -> 已处理目录");
+                var record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},\"{sourceFile}\",\"{targetFile}\",{fileSize},{status}";
+                File.AppendAllText(recordPath, record + Environment.NewLine, Encoding.UTF8);
             }
             catch (Exception ex)
             {
-                LogHelper.Logger.Error($"移动文件到已处理目录异常：{ex.Message}", ex);
-                WriteOperationRecord(recordPath, "移动", sourceFile, movedRoot ?? "N/A", fileSize, $"失败：{ex.Message}");
-                
-                // 如果移动失败，至少删除源文件
-                try
-                {
-                    File.Delete(sourceFile);
-                    WriteOperationRecord(recordPath, "删除", sourceFile, "N/A", fileSize, "移动失败后删除成功");
-                    LogHelper.Logger.Information($"移动失败，删除源文件：{Path.GetRelativePath(sourceRoot, sourceFile)}");
-                }
-                catch (Exception deleteEx)
-                {
-                    LogHelper.Logger.Error($"删除源文件也失败：{deleteEx.Message}", deleteEx);
-                    WriteOperationRecord(recordPath, "删除", sourceFile, "N/A", fileSize, $"删除失败：{deleteEx.Message}");
-                }
+                LogHelper.Logger.Error($"写入拷贝记录异常：{ex.Message}", ex);
             }
         }
 

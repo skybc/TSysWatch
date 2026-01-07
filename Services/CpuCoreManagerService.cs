@@ -55,23 +55,23 @@ namespace TSysWatch.Services
             var config = _configManager.LoadConfig();
             _coreManager.UpdateConfig(config);
             
-            // 详细记录配置加载情况
-            _logger.LogInformation($"配置加载完成:");
-            _logger.LogInformation($"  - 默认核心数: {config.DefaultCoreCount}");
-            _logger.LogInformation($"  - 扫描间隔: {config.ScanIntervalSeconds}秒");
-            _logger.LogInformation($"  - 功能启用: {config.Enabled}");
-            _logger.LogInformation($"  - 进程名核心数映射: {config.ProcessNameMapping.Count} 项");
-            _logger.LogInformation($"  - PID核心数映射: {config.PidMapping.Count} 项");
-            _logger.LogInformation($"  - 进程名核心绑定映射: {config.ProcessCoreBindingMapping.Count} 项");
-            _logger.LogInformation($"  - 系统关键进程: {config.CriticalProcesses.Count} 个");
+            // // 详细记录配置加载情况
+            // _logger.LogInformation($"配置加载完成:");
+            // _logger.LogInformation($"  - 默认核心数: {config.DefaultCoreCount}");
+            // _logger.LogInformation($"  - 扫描间隔: {config.ScanIntervalSeconds}秒");
+            // _logger.LogInformation($"  - 功能启用: {config.Enabled}");
+            // _logger.LogInformation($"  - 进程名核心数映射: {config.ProcessNameMapping.Count} 项");
+            // _logger.LogInformation($"  - PID核心数映射: {config.PidMapping.Count} 项");
+            // _logger.LogInformation($"  - 进程名核心绑定映射: {config.ProcessCoreBindingMapping.Count} 项");
+            // _logger.LogInformation($"  - 系统关键进程: {config.CriticalProcesses.Count} 个");
             
             // 记录核心绑定映射详情
             if (config.ProcessCoreBindingMapping.Any())
             {
-                _logger.LogInformation("进程名核心绑定映射详情:");
+                // _logger.LogInformation("进程名核心绑定映射详情:");
                 foreach (var kvp in config.ProcessCoreBindingMapping)
                 {
-                    _logger.LogInformation($"  - {kvp.Key} -> 核心 {kvp.Value}");
+                    // _logger.LogInformation($"  - {kvp.Key} -> 核心 {kvp.Value}");
                 }
             }
             
@@ -109,7 +109,14 @@ namespace TSysWatch.Services
 
             lock (_timerLock)
             {
-                _scanTimer?.Dispose();
+                // 先完全释放旧的 Timer
+                if (_scanTimer != null)
+                {
+                    _scanTimer.Dispose();
+                    _scanTimer = null;
+                }
+                
+                // 创建新的 Timer
                 _scanTimer = new Timer(OnScanTimer, null, TimeSpan.Zero, interval);
             }
             

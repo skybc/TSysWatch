@@ -36,13 +36,13 @@ namespace TSysWatch.Services
                 _config.DefaultCoreCount = Math.Min(newConfig.DefaultCoreCount, Environment.ProcessorCount);
                 _config.ScanIntervalSeconds = Math.Max(1, newConfig.ScanIntervalSeconds);
                 _config.Enabled = newConfig.Enabled;
-                
+
                 _config.ProcessNameMapping.Clear();
                 foreach (var kvp in newConfig.ProcessNameMapping)
                 {
                     _config.ProcessNameMapping[kvp.Key] = Math.Min(kvp.Value, Environment.ProcessorCount);
                 }
-                
+
                 _config.PidMapping.Clear();
                 foreach (var kvp in newConfig.PidMapping)
                 {
@@ -59,7 +59,7 @@ namespace TSysWatch.Services
                     }
                 }
 
-               
+
 
                 // 更新关键进程列表
                 _config.CriticalProcesses.Clear();
@@ -88,7 +88,7 @@ namespace TSysWatch.Services
 
                 if (processHandle == IntPtr.Zero)
                 {
-                    LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false, 
+                    LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false,
                         $"无法打开进程句柄，错误代码: {Marshal.GetLastWin32Error()}");
                     return false;
                 }
@@ -99,7 +99,7 @@ namespace TSysWatch.Services
                     IntPtr currentMask, systemMask;
                     if (!WindowsApi.GetProcessAffinityMask(processHandle, out currentMask, out systemMask))
                     {
-                        LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false, 
+                        LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false,
                             "无法获取当前亲和性掩码");
                         return false;
                     }
@@ -115,7 +115,7 @@ namespace TSysWatch.Services
 
                     // 设置新的亲和性掩码
                     bool success = WindowsApi.SetProcessAffinityMask(processHandle, newMask);
-                    
+
                     string processName = GetProcessName(processId);
                     LogOperation(processId, processName, currentMask, newMask, success,
                         success ? "设置成功" : $"设置失败，错误代码: {Marshal.GetLastWin32Error()}", "CoreCount");
@@ -130,7 +130,7 @@ namespace TSysWatch.Services
             }
             catch (Exception ex)
             {
-                LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false, 
+                LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false,
                     $"异常: {ex.Message}");
                 return false;
             }
@@ -150,7 +150,7 @@ namespace TSysWatch.Services
             var validCores = coreIndices.Where(c => c >= 0 && c < Environment.ProcessorCount).ToList();
             if (validCores.Count == 0)
             {
-                LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false, 
+                LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false,
                     $"无效的核心索引: {string.Join(",", coreIndices)}", "CoreBinding", string.Join(",", coreIndices));
                 return false;
             }
@@ -163,7 +163,7 @@ namespace TSysWatch.Services
 
                 if (processHandle == IntPtr.Zero)
                 {
-                    LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false, 
+                    LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false,
                         $"无法打开进程句柄，错误代码: {Marshal.GetLastWin32Error()}", "CoreBinding", string.Join(",", validCores));
                     return false;
                 }
@@ -174,7 +174,7 @@ namespace TSysWatch.Services
                     IntPtr currentMask, systemMask;
                     if (!WindowsApi.GetProcessAffinityMask(processHandle, out currentMask, out systemMask))
                     {
-                        LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false, 
+                        LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false,
                             "无法获取当前亲和性掩码", "CoreBinding", string.Join(",", validCores));
                         return false;
                     }
@@ -190,10 +190,10 @@ namespace TSysWatch.Services
 
                     // 设置新的亲和性掩码
                     bool success = WindowsApi.SetProcessAffinityMask(processHandle, newMask);
-                    
+
                     string processName = GetProcessName(processId);
                     LogOperation(processId, processName, currentMask, newMask, success,
-                        success ? "核心绑定设置成功" : $"核心绑定设置失败，错误代码: {Marshal.GetLastWin32Error()}", 
+                        success ? "核心绑定设置成功" : $"核心绑定设置失败，错误代码: {Marshal.GetLastWin32Error()}",
                         "CoreBinding", string.Join(",", validCores));
 
                     return success;
@@ -205,7 +205,7 @@ namespace TSysWatch.Services
             }
             catch (Exception ex)
             {
-                LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false, 
+                LogOperation(processId, "Unknown", IntPtr.Zero, IntPtr.Zero, false,
                     $"异常: {ex.Message}", "CoreBinding", string.Join(",", validCores));
                 return false;
             }
@@ -231,7 +231,7 @@ namespace TSysWatch.Services
                             continue;
 
                         var (targetCoreCount, coreBinding) = GetTargetCoreConfiguration(process.Id, process.ProcessName);
-                        
+
                         if (coreBinding != null && coreBinding.Count > 0)
                         {
                             // 使用具体的核心绑定
@@ -266,7 +266,7 @@ namespace TSysWatch.Services
         {
             lock (_lockObject)
             {
-                
+
                 // 2. 进程名核心绑定映射
                 if (_config.ProcessCoreBindingMapping.TryGetValue(processName, out string? nameBinding))
                 {
@@ -289,7 +289,7 @@ namespace TSysWatch.Services
                 return (_config.DefaultCoreCount, null);
             }
         }
-         
+
 
         /// <summary>
         /// 计算亲和性掩码
@@ -338,7 +338,7 @@ namespace TSysWatch.Services
         /// <summary>
         /// 记录操作日志
         /// </summary>
-        private void LogOperation(int processId, string processName, IntPtr oldMask, 
+        private void LogOperation(int processId, string processName, IntPtr oldMask,
             IntPtr newMask, bool success, string reason, string settingType = "CoreCount", string? coreBindingDetails = null)
         {
             lock (_lockObject)
@@ -364,9 +364,9 @@ namespace TSysWatch.Services
                     _logs.RemoveRange(0, 100);
                 }
 
-                string bindingInfo = !string.IsNullOrEmpty(coreBindingDetails) ? $", 核心绑定:{coreBindingDetails}" : "";
-                _logger.LogInformation($"进程亲和性设置 - PID:{processId}, 名称:{processName}, " +
-                    $"旧掩码:0x{oldMask:X}, 新掩码:0x{newMask:X}, 类型:{settingType}{bindingInfo}, 成功:{success}, 原因:{reason}");
+                // string bindingInfo = !string.IsNullOrEmpty(coreBindingDetails) ? $", 核心绑定:{coreBindingDetails}" : "";
+                // _logger.LogInformation($"进程亲和性设置 - PID:{processId}, 名称:{processName}, " +
+                //     $"旧掩码:0x{oldMask:X}, 新掩码:0x{newMask:X}, 类型:{settingType}{bindingInfo}, 成功:{success}, 原因:{reason}");
             }
         }
 
@@ -387,7 +387,7 @@ namespace TSysWatch.Services
         public List<ProcessInfo> GetCurrentProcesses()
         {
             var result = new List<ProcessInfo>();
-            
+
             try
             {
                 var processes = Process.GetProcesses();
@@ -396,7 +396,7 @@ namespace TSysWatch.Services
                     try
                     {
                         var (configuredCoreCount, coreBinding) = GetTargetCoreConfiguration(process.Id, process.ProcessName);
-                        
+
                         var info = new ProcessInfo
                         {
                             ProcessId = process.Id,
@@ -413,7 +413,7 @@ namespace TSysWatch.Services
                         {
                             IntPtr processHandle = WindowsApi.OpenProcess(
                                 WindowsApi.PROCESS_QUERY_INFORMATION, false, process.Id);
-                            
+
                             if (processHandle != IntPtr.Zero)
                             {
                                 if (WindowsApi.GetProcessAffinityMask(processHandle, out IntPtr currentMask, out _))
@@ -519,7 +519,7 @@ namespace TSysWatch.Services
             var parts = coreBinding.Split(',', StringSplitOptions.RemoveEmptyEntries);
             foreach (var part in parts)
             {
-                if (!int.TryParse(part.Trim(), out int coreIndex) || 
+                if (!int.TryParse(part.Trim(), out int coreIndex) ||
                     coreIndex < 0 || coreIndex >= Environment.ProcessorCount)
                 {
                     return false;

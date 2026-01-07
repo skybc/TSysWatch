@@ -1,0 +1,73 @@
+@using TSysWatch
+@model List<AutoMoveConfigDisplay>
+
+@if (Model == null || Model.Count == 0)
+{
+    <p class="text-muted">暂无配置，请添加第一个移动任务</p>
+}
+else
+{
+    @foreach (var (config, index) in Model.Select((c, i) => (c, i)))
+    {
+        <div class="mb-4 p-3 border rounded" style="background-color: #f8f9fa;">
+            <div class="row mb-3">
+                <div class="col-md-8">
+                    <h6><strong>任务 @(index + 1)</strong></h6>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button class="btn btn-sm btn-warning" data-source-dir="@config.SourceDirectory" data-action="edit">编辑</button>
+                    <button class="btn btn-sm btn-danger" data-source-dir="@config.SourceDirectory" data-action="delete">删除</button>
+                </div>
+            </div>
+
+            <div class="row mb-2">
+                <div class="col-md-6">
+                    <strong>源目录:</strong><br>
+                    <code>@config.SourceDirectory</code>
+                    @if (config.SourceDirExists)
+                    {
+                        <span class="badge bg-success">存在</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">不存在</span>
+                    }
+                </div>
+                <div class="col-md-6">
+                    <strong>目标磁盘:</strong><br>
+                    <code>@config.TargetDrive</code>
+                    @if (config.TargetDriveExists)
+                    {
+                        <span class="badge bg-success">存在</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning">不存在</span>
+                    }
+                </div>
+            </div>
+
+            <div class="row mb-2">
+                <div class="col-md-3">
+                    <strong>文件数:</strong><br>
+                    <span class="text-primary">@config.FileCount</span> 个文件
+                </div>
+                <div class="col-md-3">
+                    <strong>目录大小:</strong><br>
+                    <span class="text-primary">@config.DirectorySize</span>
+                </div>
+                <div class="col-md-6">
+                    <strong>移动时间限制:</strong><br>
+                    @if (config.MoveTimeLimitMinutes == 0)
+                    {
+                        <span class="text-success">无限制 (所有文件)</span>
+                    }
+                    else
+                    {
+                        <span class="text-info">@config.MoveTimeLimitMinutes 分钟</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+}

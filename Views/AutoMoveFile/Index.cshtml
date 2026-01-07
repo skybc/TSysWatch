@@ -1,0 +1,272 @@
+@using TSysWatch
+@model AutoMoveFilePageViewModel
+@{
+    ViewData["Title"] = "自动移动文件管理";
+}
+
+<h2>自动移动文件管理</h2>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>添加/编辑移动任务</h4>
+            </div>
+            <div class="card-body">
+                <form id="configForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="sourceDir">源目录 <span class="text-danger">*</span>:</label>
+                            <input type="text" class="form-control" id="sourceDir" placeholder="例: D:\Downloads" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="targetDrive">目标磁盘 <span class="text-danger">*</span>:</label>
+                            <select class="form-control" id="targetDrive" required>
+                                <option value="">-- 请选择目标磁盘 --</option>
+                                @foreach (var drive in Model.AvailableDrives)
+                                {
+                                    <option value="@drive.Name">@drive.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="timeLimitMinutes">移动时间限制 (分钟):</label>
+                            <input type="number" class="form-control" id="timeLimitMinutes" value="0" min="0" max="999999">
+                            <small class="text-muted">设置为0表示不限制，所有文件都会被移动</small>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button type="button" class="btn btn-primary" onclick="saveConfig()">添加/更新配置</button>
+                        </div>
+                    </div>
+                </form>
+                <div id="saveMessage" class="mt-3" style="display: none;">
+                    <div class="alert" id="saveAlert" role="alert"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4>当前移动配置</h4>
+                <button class="btn btn-sm btn-info" onclick="refreshConfigs()">刷新</button>
+            </div>
+            <div class="card-body">
+                <div id="configList">
+                    <partial name="_ConfigList" model="Model.Configs" />
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>功能说明</h4>
+            </div>
+            <div class="card-body">
+                <h5>配置文件格式</h5>
+                <p><strong>配置存储位置</strong>: <code>config/AutoMoveFile.json</code></p>
+                <p><strong>格式</strong>: JSON 格式，支持编辑器直接修改或通过本界面管理</p>
+
+                <h5>移动时间限制（MoveTimeLimitMinutes）</h5>
+                <ul>
+                    <li><strong>值为 0</strong>: 不启用时间限制，所有文件都会被移动</li>
+                    <li><strong>值 > 0</strong>: 只移动最后修改时间距离现在超过N分钟的文件</li>
+                    <li><strong>示例</strong>: 设置为60，则只移动最后修改时间超过1小时的文件</li>
+                </ul>
+
+                <h5>使用场景</h5>
+                <ul>
+                    <li><strong>下载文件整理</strong>: 将下载目录中的已完成下载文件移动到存储目录</li>
+                    <li><strong>临时文件清理</strong>: 将temp目录中的旧文件移动到归档目录</li>
+                    <li><strong>数据归档</strong>: 根据文件修改时间自动移动历史数据</li>
+                </ul>
+
+                <h5>配置建议</h5>
+                <ul>
+                    <li><strong>源目录</strong>: 支持本地路径（如 <code>D:\Downloads</code>）和网络路径（如 <code>\\server\share</code>）</li>
+                    <li><strong>目标磁盘</strong>: 必须与源目录在不同磁盘，格式如 <code>E:</code>、<code>F:</code></li>
+                    <li><strong>时间限制</strong>: 建议设置合理的时间限制，避免误移动正在使用的文件</li>
+                    <li><strong>多任务</strong>: 支持配置多个移动任务</li>
+                </ul>
+
+                <h5>移动记录</h5>
+                <p>所有移动操作都会记录到 <code>record/AutoMoveFile/yyyyMMdd.csv</code> 文件中</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let editingSourceDir = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 使用委托事件监听，处理编辑和删除按钮
+    document.addEventListener('click', function(event) {
+        const button = event.target;
+        
+        if (button.getAttribute('data-action') === 'edit') {
+            event.preventDefault();
+            editConfig(event);
+        } else if (button.getAttribute('data-action') === 'delete') {
+            event.preventDefault();
+            deleteConfigWithConfirm(event);
+        }
+    });
+});
+
+/**
+ * 保存配置
+ */
+function saveConfig() {
+    const sourceDir = document.getElementById('sourceDir').value.trim();
+    const targetDrive = document.getElementById('targetDrive').value.trim();
+    const timeLimit = parseInt(document.getElementById('timeLimitMinutes').value) || 0;
+
+    if (!sourceDir) {
+        showSaveMessage('源目录不能为空', 'warning');
+        return;
+    }
+
+    if (!targetDrive) {
+        showSaveMessage('目标磁盘不能为空', 'warning');
+        return;
+    }
+
+    const data = {
+        sourceDirectory: sourceDir,
+        targetDrive: targetDrive,
+        moveTimeLimitMinutes: timeLimit
+    };
+
+    fetch('/AutoMoveFile/SaveConfig', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showSaveMessage(result.message || '配置保存成功', 'success');
+            resetForm();
+            refreshConfigs();
+        } else {
+            showSaveMessage('保存失败: ' + (result.message || '未知错误'), 'danger');
+        }
+    })
+    .catch(error => {
+        showSaveMessage('网络错误: ' + error.message, 'danger');
+    });
+}
+
+/**
+ * 刷新配置列表
+ */
+function refreshConfigs() {
+    fetch('/AutoMoveFile/GetConfigsHtml')
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('configList').innerHTML = html;
+        })
+        .catch(error => {
+            document.getElementById('configList').innerHTML = '<p class="text-danger">网络错误: ' + error.message + '</p>';
+        });
+}
+
+/**
+ * 编辑配置
+ */
+function editConfig(event) {
+    const sourceDir = event.target.getAttribute('data-source-dir');
+    
+    fetch('/AutoMoveFile/GetConfigs')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const config = data.configs.find(c => c.sourceDirectory === sourceDir);
+                if (config) {
+                    editingSourceDir = config.sourceDirectory;
+                    document.getElementById('sourceDir').value = config.sourceDirectory;
+                    document.getElementById('targetDrive').value = config.targetDrive;
+                    document.getElementById('timeLimitMinutes').value = config.moveTimeLimitMinutes || '0';
+                    document.getElementById('sourceDir').disabled = true;
+                    document.querySelector('button[onclick="saveConfig()"]').textContent = '更新配置';
+                    window.scrollTo(0, 0);
+                }
+            }
+        })
+        .catch(error => {
+            showSaveMessage('加载配置失败: ' + error.message, 'danger');
+        });
+}
+
+/**
+ * 删除配置（带确认）
+ */
+function deleteConfigWithConfirm(event) {
+    const sourceDir = event.target.getAttribute('data-source-dir');
+    
+    if (!confirm(`确定要删除源目录为 "${sourceDir}" 的配置吗？`)) {
+        return;
+    }
+
+    const data = { sourceDirectory: sourceDir };
+
+    fetch('/AutoMoveFile/DeleteConfig', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            showSaveMessage(result.message || '配置删除成功', 'success');
+            refreshConfigs();
+        } else {
+            showSaveMessage('删除失败: ' + (result.message || '未知错误'), 'danger');
+        }
+    })
+    .catch(error => {
+        showSaveMessage('网络错误: ' + error.message, 'danger');
+    });
+}
+
+/**
+ * 重置表单
+ */
+function resetForm() {
+    editingSourceDir = null;
+    document.getElementById('configForm').reset();
+    document.getElementById('sourceDir').disabled = false;
+    document.getElementById('timeLimitMinutes').value = '0';
+    document.querySelector('button[onclick="saveConfig()"]').textContent = '添加/更新配置';
+}
+
+/**
+ * 显示消息提示
+ */
+function showSaveMessage(message, type) {
+    const messageDiv = document.getElementById('saveMessage');
+    const alertDiv = document.getElementById('saveAlert');
+    
+    alertDiv.className = `alert alert-${type}`;
+    alertDiv.textContent = message;
+    messageDiv.style.display = 'block';
+    
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 5000);
+}
+</script>

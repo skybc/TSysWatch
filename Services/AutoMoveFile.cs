@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Dm.util;
@@ -15,14 +16,15 @@ namespace TSysWatch
     public class AutoMoveConfig
     {
         /// <summary>
-        /// 移动根目录（源目录）
+        /// 源目录
         /// </summary>
         public string SourceDirectory { get; set; } = "";
 
         /// <summary>
-        /// 目标目录
+        /// 目标磁盘（如 D:、E: 等）
+        /// 文件会保持相对路径结构移动到目标磁盘
         /// </summary>
-        public string TargetDirectory { get; set; } = "";
+        public string TargetDrive { get; set; } = "";
 
         /// <summary>
         /// 移动时间限制（分钟）
@@ -34,7 +36,8 @@ namespace TSysWatch
 
     public class AutoMoveFile
     {
-        private static readonly string ConfigFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "AutoMoveFile.ini");
+        private static readonly string ConfigDirPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
+        private static readonly string ConfigFilePath = Path.Combine(ConfigDirPath, "AutoMoveFile.json");
         private static readonly string MoveRecordFileName = "移动记录.txt";
         private static List<AutoMoveConfig> _configs = new List<AutoMoveConfig>();
         private static bool _isRunning = false;
@@ -54,20 +57,31 @@ namespace TSysWatch
         private static void Run()
         {
             _isRunning = true;
+            List<AutoMoveConfig> configCache = null;
+            int configCheckInterval = 0;
+            const int configCheckFrequency = 2; // 每2次循环检查一次配置（约20秒）
+            
             while (_isRunning)
             {
                 try
                 {
-                    // 读取配置文件
-                    ReadIniFile();
-
-                    // 执行每个配置的移动任务
-                    foreach (var config in _configs)
+                    // 定期重新读取配置
+                    if (configCheckInterval++ >= configCheckFrequency)
                     {
-                        ExecuteMoveTask(config);
+                        ReadJsonFile();
+                        configCache = _configs;
+                        configCheckInterval = 0;
                     }
 
-                    LogHelper.Logger.Information("自动移动文件任务完成");
+                    // 执行每个配置的移动任务
+                    if (configCache != null && configCache.Count > 0)
+                    {
+                        foreach (var config in configCache)
+                        {
+                            ExecuteMoveTask(config);
+                        }
+                        LogHelper.Logger.Information("自动移动文件任务完成");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -81,73 +95,23 @@ namespace TSysWatch
         }
 
         /// <summary>
-        /// 读取INI配置文件
+        /// 读取JSON配置文件
         /// </summary>
-        private static void ReadIniFile()
+        private static void ReadJsonFile()
         {
             try
             {
+                EnsureConfigDirectory();
                 if (!File.Exists(ConfigFilePath))
                 {
-                    CreateDefaultIniFile();
+                    CreateDefaultJsonFile();
                     return;
                 }
 
                 _configs.Clear();
-                var lines = File.ReadAllLines(ConfigFilePath, Encoding.UTF8);
-                AutoMoveConfig? currentConfig = null;
-
-                foreach (var line in lines)
-                {
-                    var trimmedLine = line.Trim();
-                    if (string.IsNullOrEmpty(trimmedLine) || trimmedLine.StartsWith("#") || trimmedLine.StartsWith(";"))
-                        continue;
-
-                    if (trimmedLine.StartsWith("[") && trimmedLine.EndsWith("]"))
-                    {
-                        // 新的移动配置节
-                        if (currentConfig != null)
-                        {
-                            _configs.Add(currentConfig);
-                        }
-                        currentConfig = new AutoMoveConfig();
-                    }
-                    else if (currentConfig != null && trimmedLine.Contains("="))
-                    {
-                        var parts = trimmedLine.Split('=', 2);
-                        if (parts.Length == 2)
-                        {
-                            var key = parts[0].Trim().ToLower();
-                            var value = parts[1].Trim();
-
-                            switch (key)
-                            {
-                                case "sourcedirectory":
-                                    currentConfig.SourceDirectory = value;
-                                    break;
-                                case "targetdirectory":
-                                    currentConfig.TargetDirectory = value;
-                                    break;
-                                case "movetimelimitminutes":
-                                    if (int.TryParse(value, out int limitMinutes))
-                                    {
-                                        currentConfig.MoveTimeLimitMinutes = limitMinutes;
-                                    }
-                                    else
-                                    {
-                                        LogHelper.Logger.Warning($"无效的移动时间限制配置值：{value}，使用默认值0");
-                                    }
-                                    break;
-                            }
-                        }
-                    }
-                }
-
-                // 添加最后一个配置
-                if (currentConfig != null)
-                {
-                    _configs.Add(currentConfig);
-                }
+                var json = File.ReadAllText(ConfigFilePath);
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                _configs = JsonSerializer.Deserialize<List<AutoMoveConfig>>(json, options) ?? new List<AutoMoveConfig>();
 
                 LogHelper.Logger.Information($"读取移动配置文件成功，共{_configs.Count}个配置");
             }
@@ -157,33 +121,49 @@ namespace TSysWatch
             }
         }
 
-        /// <summary>
-        /// 创建默认配置文件
+        /// <summary>        /// 确保配置目录存在
         /// </summary>
-        private static void CreateDefaultIniFile()
+        private static void EnsureConfigDirectory()
         {
             try
             {
-                var defaultContent = @"# 自动移动文件配置
-# 支持配置多个移动任务，每个任务使用[MoveTask]开始
+                if (!Directory.Exists(ConfigDirPath))
+                {
+                    Directory.CreateDirectory(ConfigDirPath);
+                    LogHelper.Logger.Information($"创建配置目录：{ConfigDirPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Logger.Error($"创建配置目录异常：{ex.Message}", ex);
+            }
+        }
 
-[MoveTask]
-# 移动根目录（源目录） - 要移动的文件所在目录
-SourceDirectory=D:\MoveSource
-# 目标目录 - 移动到的目标目录
-TargetDirectory=E:\MoveTarget
-# 移动时间限制（分钟）- 如果文件最后修改时间与当前时间差值在此限制内则跳过移动
-# 设置为0表示不启用时间限制，所有文件都会被移动
-MoveTimeLimitMinutes=0
+        /// <summary>
+        /// 创建默认配置文件
+        /// </summary>
+        private static void CreateDefaultJsonFile()
+        {
+            try
+            {
+                EnsureConfigDirectory();
+                var defaultConfigs = new List<AutoMoveConfig>
+                {
+                    new AutoMoveConfig
+                    {
+                        SourceDirectory = "D:\\MoveSource",
+                        TargetDrive = "E:",
+                        MoveTimeLimitMinutes = 0
+                    }
+                };
 
-# 可以添加更多移动任务
-#[MoveTask]
-#SourceDirectory=C:\TempFiles
-#TargetDirectory=D:\Archive
-#MoveTimeLimitMinutes=60
-";
-
-                File.WriteAllText(ConfigFilePath, defaultContent, Encoding.UTF8);
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                };
+                var json = JsonSerializer.Serialize(defaultConfigs, options);
+                File.WriteAllText(ConfigFilePath, json, Encoding.UTF8);
                 LogHelper.Logger.Information($"创建默认移动配置文件：{ConfigFilePath}");
             }
             catch (Exception ex)
@@ -200,7 +180,7 @@ MoveTimeLimitMinutes=0
         {
             try
             {
-                if (string.IsNullOrEmpty(config.SourceDirectory) || string.IsNullOrEmpty(config.TargetDirectory))
+                if (string.IsNullOrEmpty(config.SourceDirectory) || string.IsNullOrEmpty(config.TargetDrive))
                 {
                     LogHelper.Logger.Warning("移动配置不完整，跳过该任务");
                     return;
@@ -212,36 +192,58 @@ MoveTimeLimitMinutes=0
                     return;
                 }
 
-                // 确保目标目录存在
-                if (!Directory.Exists(config.TargetDirectory))
+                // 验证源目录和目标磁盘不在同一磁盘
+                string sourceDrive = Path.GetPathRoot(config.SourceDirectory)?.TrimEnd('\\') ?? "";
+                if (sourceDrive.Equals(config.TargetDrive, StringComparison.OrdinalIgnoreCase))
                 {
-                    Directory.CreateDirectory(config.TargetDirectory);
-                    LogHelper.Logger.Information($"创建目标目录：{config.TargetDirectory}");
+                    LogHelper.Logger.Warning($"源目录磁盘 {sourceDrive} 与目标磁盘 {config.TargetDrive} 相同，跳过该任务");
+                    return;
                 }
 
-                // 获取移动记录文件路径
-                var recordPath = Path.Combine(config.SourceDirectory, "移动记录_" + DateTime.Now.ToString("yyyyMMdd") + ".txt");
+                // 验证目标磁盘存在
+                if (!DriveInfo.GetDrives().Any(d => d.Name.TrimEnd('\\').Equals(config.TargetDrive, StringComparison.OrdinalIgnoreCase)))
+                {
+                    LogHelper.Logger.Warning($"目标磁盘不存在：{config.TargetDrive}");
+                    return;
+                }
+
+                // 创建记录文件路径
+                var recordPath = GetMoveRecordPath();
                 InitializeMoveRecord(recordPath);
 
                 // 获取所有需要移动的文件
                 var filesToMove = GetFilesToMove(config.SourceDirectory);
 
                 int movedCount = 0;
+                long totalMovedSize = 0;
                 int skippedCount = 0;
+
                 foreach (var file in filesToMove)
                 {
-                    var result = MoveFile(file, config.SourceDirectory, config.TargetDirectory, recordPath, config);
-                    if (result.moved)
+                    try
                     {
-                        movedCount++;
+                        // 检查是否在时间限制范围内
+                        if (IsFileWithinTimeLimit(file, config.MoveTimeLimitMinutes))
+                        {
+                            skippedCount++;
+                            WriteMoveRecord(recordPath, file, "", "跳过", "在时间限制范围内");
+                            continue;
+                        }
+
+                        var result = MoveFileWithStructure(file, config.SourceDirectory, config.TargetDrive, recordPath);
+                        if (result.success)
+                        {
+                            movedCount++;
+                            totalMovedSize += result.fileSize;
+                        }
                     }
-                    else if (result.skipped)
+                    catch (Exception ex)
                     {
-                        skippedCount++;
+                        LogHelper.Logger.Error($"处理文件异常：{file}，错误：{ex.Message}");
                     }
                 }
 
-                LogHelper.Logger.Information($"移动任务完成，从 {config.SourceDirectory} 到 {config.TargetDirectory}，共移动 {movedCount} 个文件，跳过 {skippedCount} 个文件");
+                LogHelper.Logger.Information($"移动任务完成，从 {config.SourceDirectory} 到 {config.TargetDrive}，共移动 {movedCount} 个文件({totalMovedSize / (1024.0 * 1024.0):F2}MB)，跳过 {skippedCount} 个文件");
             }
             catch (Exception ex)
             {
@@ -283,6 +285,17 @@ MoveTimeLimitMinutes=0
         }
 
         /// <summary>
+        /// 获取移动记录文件路径（CSV格式）
+        /// </summary>
+        /// <returns>记录文件路径</returns>
+        private static string GetMoveRecordPath()
+        {
+            string recordDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "record", "AutoMoveFile");
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            return Path.Combine(recordDir, $"{today}.csv");
+        }
+
+        /// <summary>
         /// 初始化移动记录文件
         /// </summary>
         /// <param name="recordPath">记录文件路径</param>
@@ -290,11 +303,15 @@ MoveTimeLimitMinutes=0
         {
             try
             {
+                string recordDir = Path.GetDirectoryName(recordPath) ?? "";
+                if (!Directory.Exists(recordDir))
+                {
+                    Directory.CreateDirectory(recordDir);
+                }
+
                 if (!File.Exists(recordPath))
                 {
-                    var header = "=== 文件移动记录 ===" + Environment.NewLine +
-                               "格式：[时间] 操作 - 源文件路径 => 目标文件路径 (文件大小)" + Environment.NewLine +
-                               Environment.NewLine;
+                    var header = "时间,源文件,目标文件,状态,备注" + Environment.NewLine;
                     File.WriteAllText(recordPath, header, Encoding.UTF8);
                     LogHelper.Logger.Information($"创建移动记录文件：{recordPath}");
                 }
@@ -306,19 +323,73 @@ MoveTimeLimitMinutes=0
         }
 
         /// <summary>
-        /// 写入移动记录
+        /// 移动文件并保持目录结构
         /// </summary>
+        /// <param name="sourceFilePath">源文件路径</param>
+        /// <param name="sourceRootDirectory">源根目录</param>
+        /// <param name="targetDrive">目标磁盘</param>
         /// <param name="recordPath">记录文件路径</param>
-        /// <param name="operation">操作类型</param>
-        /// <param name="sourceFile">源文件路径</param>
-        /// <param name="targetFile">目标文件路径</param>
-        /// <param name="fileSize">文件大小</param>
-        /// <param name="status">操作状态</param>
-        private static void WriteMoveRecord(string recordPath, string operation, string sourceFile, string targetFile, string status)
+        /// <returns>移动结果</returns>
+        private static (bool success, long fileSize) MoveFileWithStructure(string sourceFilePath, string sourceRootDirectory, string targetDrive, string recordPath)
         {
             try
             {
-                var record = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {operation} - {sourceFile} => {targetFile} - {status}";
+                // 获取源目录的完整路径名（不含盘符）
+                // 例如：D:\Apache24\icons -> \Apache24\icons
+                string sourcePath = Path.GetFullPath(sourceRootDirectory);
+                string sourcePathWithoutDrive = sourcePath.Substring(2); // 移除盘符和冒号 (D:)
+                
+                // 计算相对路径（源文件相对于源根目录）
+                string relativePath = Path.GetRelativePath(sourceRootDirectory, sourceFilePath);
+                
+                // 构建目标路径：目标盘符 + 源目录结构 + 相对路径
+                string targetFilePath = Path.Combine(targetDrive, sourcePathWithoutDrive.TrimStart('\\'), relativePath);
+                string targetDir = Path.GetDirectoryName(targetFilePath) ?? "";
+
+                // 确保目标目录存在
+                if (!Directory.Exists(targetDir))
+                {
+                    Directory.CreateDirectory(targetDir);
+                }
+
+                // 移动文件
+                var fileInfo = new FileInfo(sourceFilePath);
+                File.Move(sourceFilePath, targetFilePath, true);
+
+                // 删除源目录中的空目录
+                try
+                {
+                    string sourceDir = Path.GetDirectoryName(sourceFilePath) ?? "";
+                    while (sourceDir != sourceRootDirectory && Directory.Exists(sourceDir) && Directory.GetFileSystemEntries(sourceDir).Length == 0)
+                    {
+                        Directory.Delete(sourceDir);
+                        sourceDir = Path.GetDirectoryName(sourceDir) ?? "";
+                    }
+                }
+                catch { }
+
+                // 记录到CSV
+                WriteMoveRecord(recordPath, sourceFilePath, targetFilePath, "成功", "");
+
+                LogHelper.Logger.Information($"文件移动成功：{sourceFilePath} -> {targetFilePath}");
+                return (true, fileInfo.Length);
+            }
+            catch (Exception ex)
+            {
+                WriteMoveRecord(recordPath, sourceFilePath, "", "失败", ex.Message);
+                LogHelper.Logger.Error($"移动文件失败：{sourceFilePath}，错误：{ex.Message}");
+                return (false, 0);
+            }
+        }
+
+        /// <summary>
+        /// 写入移动记录
+        /// </summary>
+        private static void WriteMoveRecord(string recordPath, string sourceFile, string targetFile, string status, string remark)
+        {
+            try
+            {
+                var record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},\"{sourceFile}\",\"{targetFile}\",{status},\"{remark}\"";
                 File.AppendAllText(recordPath, record + Environment.NewLine, Encoding.UTF8);
             }
             catch (Exception ex)
@@ -326,6 +397,8 @@ MoveTimeLimitMinutes=0
                 LogHelper.Logger.Error($"写入移动记录异常：{ex.Message}", ex);
             }
         }
+
+
 
         /// <summary>
         /// 检查文件是否在移动时间限制范围内

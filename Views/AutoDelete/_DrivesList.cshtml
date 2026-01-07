@@ -1,0 +1,25 @@
+@using TSysWatch
+@model List<DriveInfoDisplay>
+
+@foreach (var drive in Model)
+{
+    <div class="mb-3 p-3 border rounded">
+        <h6><strong>@drive.DriveLetter</strong></h6>
+        <p class="mb-2"><strong>总容量:</strong> @drive.TotalSize</p>
+        <p class="mb-3">
+            <strong>剩余空间:</strong>
+            @{
+                var statusClass = drive.FreeSpaceGB < 10 ? "danger" : drive.FreeSpaceGB < 25 ? "warning" : "success";
+            }
+            <span class="text-@statusClass">@drive.FreeSpace (@drive.FreeSpaceGB GB)</span>
+        </p>
+        <div class="progress" style="height: 10px;">
+            @{
+                var totalGB = double.Parse(drive.TotalSize.Split(' ')[0]);
+                var usedPercentage = Math.Round(((totalGB - drive.FreeSpaceGB) / totalGB) * 100);
+                var barClass = drive.FreeSpaceGB < 10 ? "danger" : drive.FreeSpaceGB < 25 ? "warning" : "success";
+            }
+            <div class="progress-bar bg-@barClass" style="width: @usedPercentage%"></div>
+        </div>
+    </div>
+}

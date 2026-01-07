@@ -10,7 +10,6 @@ internal partial class Program
     private static void Main(string[] args)
     {
         MonitorWindow monitorWindow = new MonitorWindow();
-        DbRepair.Start();
         AutoDeleteFile.Start();
         AutoCopyFile.Start();
         AutoMoveFile.Start();

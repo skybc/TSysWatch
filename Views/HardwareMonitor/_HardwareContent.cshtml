@@ -1,0 +1,296 @@
+@using TSysWatch
+@using TSysWatch.Models
+@model HardwareMonitorViewModel
+
+<!-- CPU 信息 -->
+@if (Model.CpuInfos != null && Model.CpuInfos.Count > 0)
+{
+    <div class="hardware-section cpu-section">
+        <div class="section-title">
+            <span class="title-icon">⚙️</span>
+            <span class="title-text">CPU (处理器)</span>
+        </div>
+        @foreach (var cpu in Model.CpuInfos)
+        {
+            <div class="hardware-card">
+                <div class="hardware-name">
+                    <span>@cpu.Name</span>
+                    <span class="hardware-type">@cpu.HardwareType</span>
+                </div>
+                <div class="sensor-list">
+                    @if (cpu.Sensors != null && cpu.Sensors.Count > 0)
+                    {
+                        @foreach (var sensor in cpu.Sensors)
+                        {
+                            <div class="sensor-item">
+                                <div class="sensor-header">
+                                    <span class="sensor-name">@sensor.Name</span>
+                                    <span class="sensor-status @GetStatusClass(sensor.Status)">@GetStatusText(sensor.Status)</span>
+                                </div>
+                                <div class="sensor-value">
+                                    @sensor.Value.ToString("F2")<span class="sensor-unit">@sensor.Unit</span>
+                                </div>
+                                @if (sensor.Min.HasValue || sensor.Max.HasValue)
+                                {
+                                    <div class="sensor-minmax">
+                                        @if (sensor.Min.HasValue) { <span>最小: @sensor.Min.Value.ToString("F2")@sensor.Unit</span> }
+                                        @if (sensor.Max.HasValue) { <span>最大: @sensor.Max.Value.ToString("F2")@sensor.Unit</span> }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="no-data">暂无传感器数据</div>
+                    }
+                </div>
+                @if (cpu.SubHardwares != null && cpu.SubHardwares.Count > 0)
+                {
+                    <div class="sub-hardware-list">
+                        @foreach (var sub in cpu.SubHardwares)
+                        {
+                            <div class="sub-hardware-card">
+                                <div class="sub-hardware-name">@sub.Name</div>
+                                <div class="sensor-list">
+                                    @if (sub.Sensors != null && sub.Sensors.Count > 0)
+                                    {
+                                        @foreach (var sensor in sub.Sensors)
+                                        {
+                                            <div class="sensor-item">
+                                                <span class="sensor-name">@sensor.Name</span>
+                                                <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                                            </div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+<!-- GPU 信息 -->
+@if (Model.GpuInfos != null && Model.GpuInfos.Count > 0)
+{
+    <div class="hardware-section gpu-section">
+        <div class="section-title">
+            <span class="title-icon">🎮</span>
+            <span class="title-text">GPU (显卡)</span>
+        </div>
+        @foreach (var gpu in Model.GpuInfos)
+        {
+            <div class="hardware-card">
+                <div class="hardware-name">
+                    <span>@gpu.Name</span>
+                    <span class="hardware-type">@gpu.HardwareType</span>
+                </div>
+                <div class="sensor-list">
+                    @if (gpu.Sensors != null && gpu.Sensors.Count > 0)
+                    {
+                        @foreach (var sensor in gpu.Sensors)
+                        {
+                            <div class="sensor-item">
+                                <span class="sensor-name">@sensor.Name</span>
+                                <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- 内存信息 -->
+@if (Model.MemoryInfo != null)
+{
+    <div class="hardware-section memory-section">
+        <div class="section-title">
+            <span class="title-icon">💾</span>
+            <span class="title-text">RAM (内存)</span>
+        </div>
+        <div class="hardware-card">
+            <div class="hardware-name">@Model.MemoryInfo.Name</div>
+            <div class="sensor-list">
+                @if (Model.MemoryInfo.Sensors != null && Model.MemoryInfo.Sensors.Count > 0)
+                {
+                    @foreach (var sensor in Model.MemoryInfo.Sensors)
+                    {
+                        <div class="sensor-item">
+                            <span class="sensor-name">@sensor.Name</span>
+                            <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- 存储信息 -->
+@if (Model.StorageInfos != null && Model.StorageInfos.Count > 0)
+{
+    <div class="hardware-section storage-section">
+        <div class="section-title">
+            <span class="title-icon">💿</span>
+            <span class="title-text">存储</span>
+        </div>
+        @foreach (var storage in Model.StorageInfos)
+        {
+            <div class="hardware-card">
+                <div class="hardware-name">
+                    <span>@storage.Name</span>
+                    <span class="hardware-type">@storage.HardwareType</span>
+                </div>
+                <div class="sensor-list">
+                    @if (storage.Sensors != null && storage.Sensors.Count > 0)
+                    {
+                        @foreach (var sensor in storage.Sensors)
+                        {
+                            <div class="sensor-item">
+                                <span class="sensor-name">@sensor.Name</span>
+                                <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- 主板信息 -->
+@if (Model.MotherboardInfos != null && Model.MotherboardInfos.Count > 0)
+{
+    <div class="hardware-section motherboard-section">
+        <div class="section-title">
+            <span class="title-icon">🖥️</span>
+            <span class="title-text">主板</span>
+        </div>
+        @foreach (var mobo in Model.MotherboardInfos)
+        {
+            <div class="hardware-card">
+                <div class="hardware-name">@mobo.Name</div>
+                <div class="sensor-list">
+                    @if (mobo.Sensors != null && mobo.Sensors.Count > 0)
+                    {
+                        @foreach (var sensor in mobo.Sensors)
+                        {
+                            <div class="sensor-item">
+                                <span class="sensor-name">@sensor.Name</span>
+                                <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- 网络信息 -->
+@if (Model.NetworkInfos != null && Model.NetworkInfos.Count > 0)
+{
+    <div class="hardware-section network-section">
+        <div class="section-title">
+            <span class="title-icon">🌐</span>
+            <span class="title-text">网络</span>
+        </div>
+        @foreach (var net in Model.NetworkInfos)
+        {
+            <div class="hardware-card">
+                <div class="hardware-name">@net.Name</div>
+                <div class="sensor-list">
+                    @if (net.Sensors != null && net.Sensors.Count > 0)
+                    {
+                        @foreach (var sensor in net.Sensors)
+                        {
+                            <div class="sensor-item">
+                                <span class="sensor-name">@sensor.Name</span>
+                                <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<!-- 电源信息 -->
+@if (Model.PowerSupplyInfo != null)
+{
+    <div class="hardware-section psu-section">
+        <div class="section-title">
+            <span class="title-icon">⚡</span>
+            <span class="title-text">电源</span>
+        </div>
+        <div class="hardware-card">
+            <div class="hardware-name">@Model.PowerSupplyInfo.Name</div>
+            <div class="sensor-list">
+                @if (Model.PowerSupplyInfo.Sensors != null && Model.PowerSupplyInfo.Sensors.Count > 0)
+                {
+                    @foreach (var sensor in Model.PowerSupplyInfo.Sensors)
+                    {
+                        <div class="sensor-item">
+                            <span class="sensor-name">@sensor.Name</span>
+                            <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- 电池信息 -->
+@if (Model.BatteryInfo != null)
+{
+    <div class="hardware-section battery-section">
+        <div class="section-title">
+            <span class="title-icon">🔋</span>
+            <span class="title-text">电池</span>
+        </div>
+        <div class="hardware-card">
+            <div class="hardware-name">@Model.BatteryInfo.Name</div>
+            <div class="sensor-list">
+                @if (Model.BatteryInfo.Sensors != null && Model.BatteryInfo.Sensors.Count > 0)
+                {
+                    @foreach (var sensor in Model.BatteryInfo.Sensors)
+                    {
+                        <div class="sensor-item">
+                            <span class="sensor-name">@sensor.Name</span>
+                            <span class="sensor-value">@sensor.Value.ToString("F2") @sensor.Unit</span>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@functions {
+    private string GetStatusClass(string status)
+    {
+        return status switch
+        {
+            "warning" => "status-warning",
+            "critical" => "status-critical",
+            _ => "status-normal"
+        };
+    }
+
+    private string GetStatusText(string status)
+    {
+        return status switch
+        {
+            "warning" => "警告",
+            "critical" => "严重",
+            _ => "正常"
+        };
+    }
+}
