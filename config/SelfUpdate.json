@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "packageDirectory": "C:\\WebUpdater\\packages",
+  "backupDirectory": "C:\\WebUpdater\\backup",
+  "updaterExePath": "C:\\WebUpdater\\Updater\\Updater.exe",
+  "hostingType": "Kestrel",
+  "iisAppPoolName": null,
+  "iisSiteName": null,
+  "windowsServiceName": null,
+  "kestrelProcessName": "dotnet",
+  "maxPackageSize": 524288000,
+  "updateTimeoutMs": 300000
+}

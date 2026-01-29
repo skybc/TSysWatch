@@ -27,6 +27,10 @@ internal partial class Program
         builder.Services.AddSingleton<HardwareDataCollectionService>();
         builder.Services.AddHostedService<HardwareDataRecordingService>();
 
+        // 注册自更新系统服务
+        builder.Services.AddSingleton<SelfUpdateConfigManager>();
+        builder.Services.AddScoped<ISelfUpdateService, SelfUpdateService>();
+
         var app = builder.Build().UseDefaultServiceProvider();
         
         app.UseStaticFiles();

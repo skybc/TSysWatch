@@ -1,0 +1,319 @@
+@using TSysWatch.Models
+
+@model SelfUpdatePageViewModel
+@{
+    ViewData["Title"] = "自动更新";
+}
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <h1 class="mb-4">更新</h1>
+
+            <!-- 当前版本信息 -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">当前版本信息</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>应用版本：</strong> <span class="badge badge-primary">@Model.CurrentVersion</span></p>
+                            <p><strong>构建时间：</strong> @Model.BuildTime?.ToString("yyyy-MM-dd HH:mm:ss")</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>应用类型：</strong> <span class="badge badge-secondary">@Model.AppType</span></p>
+                            <p><strong>部署路径：</strong> <code>@Model.RunningPath</code></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 更新包上传 -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">步骤 1：上传更新包</h5>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <div class="form-group">
+                            <label for="updateFile">选择 ZIP 文件：</label>
+                            <div class="custom-file">
+                                <input type="file" class="custom-file-input" id="updateFile" name="file" accept=".zip" required>
+                                <label class="custom-file-label" for="updateFile">选择文件...</label>
+                            </div>
+                            <small class="form-text text-muted">
+                                ✓ 仅接受 .zip 格式<br>
+                                ✓ 最大文件大小：@(Model.MaxUploadSizeMB) MB<br>
+                                ✓ ZIP 内部结构：web/ 和 version.json
+                            </small>
+                        </div>
+
+                        <div id="uploadProgress" class="mt-3" style="display:none;">
+                            <div class="progress" style="height: 25px;">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%">
+                                    <span id="progressText">0%</span>
+                                </div>
+                            </div>
+                            <p class="text-muted mt-2" id="uploadStatus">准备上传...</p>
+                        </div>
+
+                        <button type="button" id="uploadBtn" class="btn btn-primary" onclick="uploadFile()">
+                            <i class="fas fa-cloud-upload-alt"></i> 上传更新包
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 更新状态 -->
+            <div id="uploadResult" class="alert alert-info" style="display:none;">
+                <strong id="resultTitle">上传结果：</strong>
+                <p id="resultMessage"></p>
+            </div>
+
+            <!-- 应用更新 -->
+            <div class="card" id="applyCard" style="display:none;">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">步骤 2：应用更新</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <strong>⚠️ 注意：</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>点击"应用更新"后，Web 程序将停止，由独立的 Updater.exe 负责升级</li>
+                            <li>升级过程中，网站将不可用（通常需要 1-5 分钟）</li>
+                            <li>更新完成后，Web 程序将自动重启</li>
+                            <li>更新失败时，系统将自动回滚至旧版本</li>
+                        </ul>
+                    </div>
+                    <button type="button" id="applyBtn" class="btn btn-success btn-lg" onclick="applyUpdate()">
+                        <i class="fas fa-sync"></i> 应用更新
+                    </button>
+                    <span class="ml-3 text-muted">准备就绪，点击开始更新</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-header h5 {
+        font-weight: 600;
+    }
+
+    .badge {
+        font-size: 0.9rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    code {
+        background-color: #f4f4f4;
+        padding: 0.2rem 0.4rem;
+        border-radius: 3px;
+        font-size: 0.9rem;
+    }
+
+    .custom-file-input:lang(zh) ~ .custom-file-label::after {
+        content: "选择文件";
+    }
+
+    .custom-file-label::after {
+        content: "选择文件";
+    }
+
+    .progress {
+        background-color: #e9ecef;
+    }
+
+    .progress-bar-animated {
+        animation: progress-bar-stripes 1s linear infinite;
+    }
+
+    #applyBtn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+</style>
+
+<script>
+    // 配置信息
+    const API_UPLOAD = '@Url.Action("Upload", "SelfUpdate")';
+    const API_APPLY = '@Url.Action("Apply", "SelfUpdate")';
+    const API_STATUS = '@Url.Action("Status", "SelfUpdate")';
+    const MAX_SIZE_MB = @Model.MaxUploadSizeMB;
+
+    // 文件变化事件
+    document.getElementById('updateFile').addEventListener('change', function (e) {
+        const fileName = e.target.files[0]?.name || '选择文件...';
+        const label = document.querySelector('.custom-file-label');
+        label.textContent = fileName;
+    });
+
+    /// <summary>
+    /// 上传更新包文件
+    /// </summary>
+    function uploadFile() {
+        const fileInput = document.getElementById('updateFile');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert('请先选择一个文件');
+            return;
+        }
+
+        // 验证文件类型
+        if (!file.name.endsWith('.zip')) {
+            alert('仅支持 .zip 文件格式');
+            return;
+        }
+
+        // 验证文件大小
+        const fileSizeMB = file.size / (1024 * 1024);
+        if (fileSizeMB > MAX_SIZE_MB) {
+            alert(`文件大小超出限制 (最大 ${MAX_SIZE_MB} MB，当前 ${fileSizeMB.toFixed(2)} MB)`);
+            return;
+        }
+
+        // 显示进度条
+        document.getElementById('uploadProgress').style.display = 'block';
+        document.getElementById('uploadBtn').disabled = true;
+        document.getElementById('uploadResult').style.display = 'none';
+
+        // 创建 FormData
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // 创建 XMLHttpRequest 以支持进度事件
+        const xhr = new XMLHttpRequest();
+
+        // 监听上传进度
+        xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = (e.loaded / e.total) * 100;
+                updateProgressBar(percentComplete);
+            }
+        });
+
+        // 监听完成
+        xhr.addEventListener('load', () => {
+            document.getElementById('uploadBtn').disabled = false;
+
+            if (xhr.status === 200) {
+                const response = JSON.parse(xhr.responseText);
+                if (response.success) {
+                    showSuccess('✓ ' + response.message);
+                    document.getElementById('applyCard').style.display = 'block';
+                } else {
+                    showError('✗ ' + (response.message || '上传失败'));
+                }
+            } else {
+                showError('✗ 服务器错误: ' + xhr.status);
+            }
+
+            document.getElementById('uploadProgress').style.display = 'none';
+        });
+
+        // 监听错误
+        xhr.addEventListener('error', () => {
+            document.getElementById('uploadBtn').disabled = false;
+            showError('✗ 网络错误，请检查连接');
+            document.getElementById('uploadProgress').style.display = 'none';
+        });
+
+        // 发送请求
+        xhr.open('POST', API_UPLOAD);
+        xhr.send(formData);
+    }
+
+    /// <summary>
+    /// 更新进度条显示
+    /// </summary>
+    function updateProgressBar(percent) {
+        const bar = document.getElementById('progressBar');
+        const text = document.getElementById('progressText');
+        const status = document.getElementById('uploadStatus');
+
+        bar.style.width = percent + '%';
+        text.textContent = percent.toFixed(0) + '%';
+
+        if (percent < 100) {
+            status.textContent = '正在上传中... ' + percent.toFixed(0) + '%';
+        } else {
+            status.textContent = '上传完成，验证中...';
+        }
+    }
+
+    /// <summary>
+    /// 显示成功信息
+    /// </summary>
+    function showSuccess(message) {
+        const result = document.getElementById('uploadResult');
+        result.className = 'alert alert-success';
+        document.getElementById('resultTitle').textContent = '✓ 成功：';
+        document.getElementById('resultMessage').textContent = message;
+        result.style.display = 'block';
+    }
+
+    /// <summary>
+    /// 显示错误信息
+    /// </summary>
+    function showError(message) {
+        const result = document.getElementById('uploadResult');
+        result.className = 'alert alert-danger';
+        document.getElementById('resultTitle').textContent = '✗ 错误：';
+        document.getElementById('resultMessage').textContent = message;
+        result.style.display = 'block';
+    }
+
+    /// <summary>
+    /// 应用自更新
+    /// </summary>
+    function applyUpdate() {
+        if (!confirm('确认要应用更新吗？\n\n更新过程中，网站将不可用！')) {
+            return;
+        }
+
+        const applyBtn = document.getElementById('applyBtn');
+        applyBtn.disabled = true;
+        applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 更新处理中...';
+
+        fetch(API_APPLY, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccess(data.message + '\n\n网站将在几分钟后重启，请稍候...');
+                applyBtn.innerHTML = '<i class="fas fa-check"></i> 更新已启动';
+                
+                // 30 秒后刷新页面
+                setTimeout(() => {
+                    location.reload();
+                }, 30000);
+            } else {
+                showError(data.message);
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = '<i class="fas fa-sync"></i> 应用更新';
+            }
+        })
+        .catch(error => {
+            showError('网络错误: ' + error.message);
+            applyBtn.disabled = false;
+            applyBtn.innerHTML = '<i class="fas fa-sync"></i> 应用更新';
+        });
+    }
+
+    // 页面加载时初始化
+    document.addEventListener('DOMContentLoaded', function () {
+        // 可选：检查是否有待应用的更新包
+        console.log('自更新页面已加载');
+    });
+</script>
