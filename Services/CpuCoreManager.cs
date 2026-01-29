@@ -219,9 +219,10 @@ namespace TSysWatch.Services
             if (!_config.Enabled)
                 return;
 
+            Process[] processes = null;
             try
             {
-                var processes = Process.GetProcesses();
+                processes = Process.GetProcesses();
                 foreach (var process in processes)
                 {
                     try
@@ -249,13 +250,25 @@ namespace TSysWatch.Services
                     }
                     finally
                     {
-                        process.Dispose();
+                        process?.Dispose();
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "扫描进程时出错");
+            }
+            finally
+            {
+                // 显式释放进程数组
+                if (processes != null)
+                {
+                    foreach (var process in processes)
+                    {
+                        process?.Dispose();
+                    }
+                    processes = null;
+                }
             }
         }
 
@@ -387,10 +400,11 @@ namespace TSysWatch.Services
         public List<ProcessInfo> GetCurrentProcesses()
         {
             var result = new List<ProcessInfo>();
+            Process[] processes = null;
 
             try
             {
-                var processes = Process.GetProcesses();
+                processes = Process.GetProcesses();
                 foreach (var process in processes)
                 {
                     try
@@ -447,13 +461,25 @@ namespace TSysWatch.Services
                     }
                     finally
                     {
-                        process.Dispose();
+                        process?.Dispose();
                     }
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "获取进程列表时出错");
+            }
+            finally
+            {
+                // 显式释放进程数组
+                if (processes != null)
+                {
+                    foreach (var process in processes)
+                    {
+                        process?.Dispose();
+                    }
+                    processes = null;
+                }
             }
 
             return result;

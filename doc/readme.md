@@ -4,17 +4,31 @@
 
 TSysWatch 是一个 ASP.NET Core Web 应用，提供系统监控、CPU 核心绑定、文件自动管理等功能。
 
+## 🏠 首页导航
+
+首页采用**美观的卡片式导航设计**，提供所有工具的快速访问：
+- **自动化工具**：自动删除、自动拷贝、自动移动、数据库修复
+- **系统管理**：CPU 核心管理、硬件监控、文件管理
+
+📄 [首页设计详细说明](HOME_PAGE_REDESIGN.md) | 📊 [完成总结](HOMEPAGE_COMPLETION.md)
+
 ## 模块导航
 
 本项目采用模块化架构，各模块独立文档如下：
 
 ### 文件管理模块
 - [自动删除文件功能](modules/01-autodeletefile.md)
+  - ✨ 支持下载删除历史记录
 - [自动移动文件功能](modules/02-automovefile.md)
+  - ✨ 支持下载移动历史记录
 - [自动拷贝文件功能](modules/03-autocopyfile.md)
+  - ✨ 支持下载拷贝历史记录
+- **📎 [下载功能实现指南](modules/FILE_OPERATIONS_UI_COMPLETION.md)** - 三个模块统一的下载历史记录 UI 实现
+- **📊 [完成总结报告](FILE_OPERATIONS_COMPLETION_SUMMARY.md)** - 项目功能完成情况总结
 
 ### 系统监控模块
 - [CPU 核心绑定功能](modules/10-cpucore.md)
+- [硬件监控与定时记录功能](modules/11-hardwaremonitor.md)
 
 ### 基础设施模块
 - [数据库维修功能](modules/20-dbrepair.md)

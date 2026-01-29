@@ -213,6 +213,13 @@ namespace TSysWatch
 
                 // 获取所有需要移动的文件
                 var filesToMove = GetFilesToMove(config.SourceDirectory);
+                
+                // 如果没有文件需要移动，释放内存并返回
+                if (filesToMove == null || filesToMove.Count == 0)
+                {
+                    LogHelper.Logger.Information($"源目录 {config.SourceDirectory} 没有需要移动的文件");
+                    return;
+                }
 
                 int movedCount = 0;
                 long totalMovedSize = 0;
@@ -226,7 +233,7 @@ namespace TSysWatch
                         if (IsFileWithinTimeLimit(file, config.MoveTimeLimitMinutes))
                         {
                             skippedCount++;
-                            WriteMoveRecord(recordPath, file, "", "跳过", "在时间限制范围内");
+                            // 不记录跳过的文件
                             continue;
                         }
 
@@ -244,6 +251,10 @@ namespace TSysWatch
                 }
 
                 LogHelper.Logger.Information($"移动任务完成，从 {config.SourceDirectory} 到 {config.TargetDrive}，共移动 {movedCount} 个文件({totalMovedSize / (1024.0 * 1024.0):F2}MB)，跳过 {skippedCount} 个文件");
+                
+                // 释放文件列表内存
+                filesToMove.Clear();
+                filesToMove = null;
             }
             catch (Exception ex)
             {
@@ -311,7 +322,7 @@ namespace TSysWatch
 
                 if (!File.Exists(recordPath))
                 {
-                    var header = "时间,源文件,目标文件,状态,备注" + Environment.NewLine;
+                    var header = "时间,原文件,目标文件" + Environment.NewLine;
                     File.WriteAllText(recordPath, header, Encoding.UTF8);
                     LogHelper.Logger.Information($"创建移动记录文件：{recordPath}");
                 }
@@ -369,14 +380,13 @@ namespace TSysWatch
                 catch { }
 
                 // 记录到CSV
-                WriteMoveRecord(recordPath, sourceFilePath, targetFilePath, "成功", "");
+                WriteMoveRecord(recordPath, sourceFilePath, targetFilePath);
 
                 LogHelper.Logger.Information($"文件移动成功：{sourceFilePath} -> {targetFilePath}");
                 return (true, fileInfo.Length);
             }
             catch (Exception ex)
             {
-                WriteMoveRecord(recordPath, sourceFilePath, "", "失败", ex.Message);
                 LogHelper.Logger.Error($"移动文件失败：{sourceFilePath}，错误：{ex.Message}");
                 return (false, 0);
             }
@@ -385,11 +395,11 @@ namespace TSysWatch
         /// <summary>
         /// 写入移动记录
         /// </summary>
-        private static void WriteMoveRecord(string recordPath, string sourceFile, string targetFile, string status, string remark)
+        private static void WriteMoveRecord(string recordPath, string sourceFile, string targetFile)
         {
             try
             {
-                var record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},\"{sourceFile}\",\"{targetFile}\",{status},\"{remark}\"";
+                var record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},\"{sourceFile}\",\"{targetFile}\"";
                 File.AppendAllText(recordPath, record + Environment.NewLine, Encoding.UTF8);
             }
             catch (Exception ex)
@@ -469,8 +479,6 @@ namespace TSysWatch
                     
                     LogHelper.Logger.Information($"跳过移动文件：{Path.GetRelativePath(sourceRoot, sourceFile)} - {skippedReason}");
                     
-                    // 记录跳过操作
-                    WriteMoveRecord(recordPath, "跳过", sourceFile, "N/A", skippedReason);
                     
                     return new MoveResult(false, true, skippedReason);
                 }
@@ -497,20 +505,13 @@ namespace TSysWatch
                 LogHelper.Logger.Information($"移动文件：{relativePath}");
 
                 // 记录移动操作
-                WriteMoveRecord(recordPath, "移动", sourceFile, targetFile, "成功");
+                WriteMoveRecord(recordPath, sourceFile, targetFile);
 
                 return new MoveResult(true, false, "移动成功");
             }
             catch (Exception ex)
             {
                 LogHelper.Logger.Error($"移动文件异常 {sourceFile}：{ex.Message}", ex);
-
-                // 记录失败操作
-                try
-                {
-                    WriteMoveRecord(recordPath, "移动", sourceFile, "失败", ex.Message);
-                }
-                catch { }
 
                 return new MoveResult(false, false, ex.Message);
             }

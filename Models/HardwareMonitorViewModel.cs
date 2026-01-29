@@ -51,6 +51,36 @@ namespace TSysWatch
         /// 最后更新时间
         /// </summary>
         public DateTime LastUpdateTime { get; set; } = DateTime.Now;
+
+        /// <summary>
+        /// 可用的传感器类型列表
+        /// </summary>
+        public List<string> AvailableSensorTypes { get; set; } = new()
+        {
+            "Temperature", "Voltage", "Fan", "Power", "Load", "Clock", "Data",
+            "Flow", "Level", "Frequency", "Current", "Energy", "SmallData",
+            "Throughput", "TimeSpan", "Noise", "Humidity"
+        };
+
+        /// <summary>
+        /// 是否启用定时记录
+        /// </summary>
+        public bool EnableTimedRecording { get; set; }
+
+        /// <summary>
+        /// 定时记录间隔（秒）
+        /// </summary>
+        public int RecordingIntervalSeconds { get; set; }
+
+        /// <summary>
+        /// CSV存储目录
+        /// </summary>
+        public string CsvStoragePath { get; set; }
+
+        /// <summary>
+        /// 需要记录的传感器类型列表
+        /// </summary>
+        public List<string> RecordedSensorTypes { get; set; } = new();
     }
 
     /// <summary>

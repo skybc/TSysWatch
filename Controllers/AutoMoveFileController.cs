@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.IO.Compression;
 using TSysWatch;
 
 namespace TSysWatch.Controllers
@@ -226,6 +227,130 @@ namespace TSysWatch.Controllers
                     fileCount = fileCount,
                     directorySize = dirSize
                 });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// 获取移动记录CSV文件列表
+        /// </summary>
+        [HttpGet]
+        public IActionResult GetMoveRecordFiles(string startDate = null, string endDate = null)
+        {
+            try
+            {
+                string recordDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "record", "AutoMoveFile");
+                if (!Directory.Exists(recordDir))
+                {
+                    return Json(new { success = true, files = new List<dynamic>() });
+                }
+
+                DateTime? start = null;
+                DateTime? end = null;
+
+                if (!string.IsNullOrWhiteSpace(startDate) && DateTime.TryParse(startDate, out var parsedStart))
+                {
+                    start = parsedStart;
+                }
+
+                if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var parsedEnd))
+                {
+                    end = parsedEnd.AddDays(1).AddSeconds(-1);
+                }
+
+                var files = Directory.GetFiles(recordDir, "*.csv")
+                    .Select(filePath => new FileInfo(filePath))
+                    .Where(f =>
+                    {
+                        if (start.HasValue && f.CreationTime < start.Value) return false;
+                        if (end.HasValue && f.CreationTime > end.Value) return false;
+                        return true;
+                    })
+                    .Select(f => new
+                    {
+                        name = f.Name,
+                        path = f.FullName,
+                        size = f.Length,
+                        created = f.CreationTime
+                    })
+                    .OrderByDescending(f => f.created)
+                    .ToList();
+
+                return Json(new { success = true, files = files });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// 下载移动记录压缩包
+        /// </summary>
+        [HttpGet]
+        public IActionResult DownloadMoveRecords(string startDate = null, string endDate = null)
+        {
+            try
+            {
+                string recordDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "record", "AutoMoveFile");
+                if (!Directory.Exists(recordDir))
+                {
+                    return Json(new { success = false, message = "没有找到记录文件" });
+                }
+
+                DateTime? start = null;
+                DateTime? end = null;
+
+                if (!string.IsNullOrWhiteSpace(startDate) && DateTime.TryParse(startDate, out var parsedStart))
+                {
+                    start = parsedStart;
+                }
+
+                if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var parsedEnd))
+                {
+                    end = parsedEnd.AddDays(1).AddSeconds(-1);
+                }
+
+                var files = Directory.GetFiles(recordDir, "*.csv")
+                    .Select(filePath => new FileInfo(filePath))
+                    .Where(f =>
+                    {
+                        if (start.HasValue && f.CreationTime < start.Value) return false;
+                        if (end.HasValue && f.CreationTime > end.Value) return false;
+                        return true;
+                    })
+                    .Select(f => f.FullName)
+                    .ToList();
+
+                if (files.Count == 0)
+                {
+                    return Json(new { success = false, message = "没有找到要下载的文件" });
+                }
+
+                var zipFileName = $"MoveRecords_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+                var zipPath = Path.Combine(Path.GetTempPath(), zipFileName);
+
+                using (var zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+                {
+                    foreach (var filePath in files)
+                    {
+                        var entryName = Path.GetFileName(filePath);
+                        zipArchive.CreateEntryFromFile(filePath, entryName);
+                    }
+                }
+
+                var fileBytes = System.IO.File.ReadAllBytes(zipPath);
+
+                try
+                {
+                    System.IO.File.Delete(zipPath);
+                }
+                catch { }
+
+                return base.File(fileBytes, "application/zip", zipFileName);
             }
             catch (Exception ex)
             {

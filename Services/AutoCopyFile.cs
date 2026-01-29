@@ -205,6 +205,13 @@ namespace TSysWatch
 
                 // 获取所有图片文件
                 var imageFiles = GetImageFiles(config.SourceDirectory);
+                
+                // 如果没有文件需要拷贝，释放内存并返回
+                if (imageFiles == null || imageFiles.Count == 0)
+                {
+                    LogHelper.Logger.Information($"源目录 {config.SourceDirectory} 没有需要拷贝的文件");
+                    return;
+                }
 
                 int copiedCount = 0;
                 long totalCopiedSize = 0;
@@ -247,6 +254,10 @@ namespace TSysWatch
                 }
 
                 LogHelper.Logger.Information($"拷贝任务完成，从 {config.SourceDirectory} 到 {config.TargetDrive}，共拷贝 {copiedCount} 个文件，总大小 {totalCopiedSize / (1024.0 * 1024.0):F2}MB");
+                
+                // 释放文件列表内存
+                imageFiles.Clear();
+                imageFiles = null;
             }
             catch (Exception ex)
             {
@@ -318,7 +329,7 @@ namespace TSysWatch
 
                 if (!File.Exists(recordPath))
                 {
-                    var header = "时间,源文件,目标文件,文件大小(字节),状态" + Environment.NewLine;
+                    var header = "时间,原文件,目标文件" + Environment.NewLine;
                     File.WriteAllText(recordPath, header, Encoding.UTF8);
                     LogHelper.Logger.Information($"创建拷贝记录文件：{recordPath}");
                 }
@@ -364,27 +375,25 @@ namespace TSysWatch
                 File.Copy(sourceFilePath, targetFilePath, true);
 
                 // 记录到CSV
-                WriteCopyRecord(recordPath, sourceFilePath, targetFilePath, fileInfo.Length, "成功");
+                WriteCopyRecord(recordPath, sourceFilePath, targetFilePath);
 
                 LogHelper.Logger.Information($"文件拷贝成功：{sourceFilePath} -> {targetFilePath}");
                 return (true, fileInfo.Length);
             }
             catch (Exception ex)
             {
-                WriteCopyRecord(recordPath, sourceFilePath, "", 0, $"失败：{ex.Message}");
                 LogHelper.Logger.Error($"拷贝文件失败：{sourceFilePath}，错误：{ex.Message}");
                 return (false, 0);
             }
         }
-
         /// <summary>
         /// 写入拷贝记录
         /// </summary>
-        private static void WriteCopyRecord(string recordPath, string sourceFile, string targetFile, long fileSize, string status)
+        private static void WriteCopyRecord(string recordPath, string sourceFile, string targetFile)
         {
             try
             {
-                var record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},\"{sourceFile}\",\"{targetFile}\",{fileSize},{status}";
+                var record = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss},\"{sourceFile}\",\"{targetFile}\"";
                 File.AppendAllText(recordPath, record + Environment.NewLine, Encoding.UTF8);
             }
             catch (Exception ex)

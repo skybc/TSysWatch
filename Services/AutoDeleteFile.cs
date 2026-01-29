@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -229,26 +230,22 @@ namespace TSysWatch
                 var candidateFiles = GetFilesToDelete(config);
                 var dt2 = DateTime.Now;
 
+                // 如果没有候选文件，直接返回
+                if (candidateFiles == null || candidateFiles.Count == 0)
+                {
+                    LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 没有需要清理的文件");
+                    return;
+                }
+
                 // 如果容量条件满足，按时间排序（最旧的文件先删除） 
                 LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 开始清理");
                 int deletedCount = 0;
                 long totalDeletedSize = 0;
-                var logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot/record/auto_delete", dt2.ToString("yyyy/MM"), $"{dt2.ToString("yyyyMMdd")}.txt");
-                // create
-                var logDirectory = Path.GetDirectoryName(logFilePath);
-                if (!string.IsNullOrEmpty(logDirectory))
-                {
-                    Directory.CreateDirectory(logDirectory);
-                }
-                // 检查文件是否存在
-                if (!File.Exists(logFilePath))
-                {
-                    // 创建日志文件
-                    File.Create(logFilePath).Dispose();
-                }
+                var recordFilePath = GetDeleteRecordPath();
+                InitializeDeleteRecord(recordFilePath);
 
-                // 收集日志消息，最后一次性写入，避免频繁打开文件
-                var logMessages = new List<string>();
+                // 收集删除进度，最后一次性写入
+                var deleteRecords = new List<string>();
                 
                 // 遍历候选文件列表，按时间排序
                 LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 找到 {candidateFiles.Count} 个候选文件，开始删除");
@@ -275,9 +272,9 @@ namespace TSysWatch
                         // 打印
                         deletedCount++;
                         totalDeletedSize += file.Length;
-                        // 删除文件单独日志，每天一个，放到：当前应用目录+/record/auto_delete/yyyy/MM/yyyyMMdd.txt里面
+                        // 记录到 CSV
                         string log = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} 删除文件：{file.FullName}，大小：{fileSize / (1024.0 * 1024.0):F2}MB,文件修改日期：{file.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")}，原因：{dr.Reason}，文件年龄：{fileAge.Days}天";
-                        logMessages.Add(log);
+                        deleteRecords.Add($"{DateTime.Now:yyyy-MM-dd HH:mm:ss},\"{file.FullName}\"");
                         LogHelper.Logger.Information(log);
                     }
                     catch (Exception ex)
@@ -286,21 +283,24 @@ namespace TSysWatch
                     }
                 }
                 
-                // 一次性写入所有日志消息
-                if (logMessages.Count > 0)
+                // 一次性写入所有删除记录到 CSV
+                if (deleteRecords.Count > 0)
                 {
-                    using (var stream = new StreamWriter(logFilePath, true))
+                    using (var stream = new StreamWriter(recordFilePath, true, Encoding.UTF8))
                     {
-                        foreach (var log in logMessages)
+                        foreach (var record in deleteRecords)
                         {
-                            stream.WriteLine(log);
+                            stream.WriteLine(record);
                         }
                         stream.Flush();
                     }
-                    logMessages.Clear();
+                    deleteRecords.Clear();
                 }
                 
                 LogHelper.Logger.Information($"磁盘 {config.DriveLetter} 清理完成，删除了 {deletedCount} 个文件，总大小：{totalDeletedSize / (1024.0 * 1024.0):F2}MB");
+                
+                // 显式清理和释放候选文件列表
+                candidateFiles = null;
             }
             catch (Exception ex)
             {
@@ -479,6 +479,42 @@ namespace TSysWatch
             //    }
             //}
             return files;
+        }
+
+        /// <summary>
+        /// 获取删除记录文件路径
+        /// </summary>
+        private static string GetDeleteRecordPath()
+        {
+            string recordDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "record", "AutoDeleteFile");
+            string today = DateTime.Now.ToString("yyyyMMdd");
+            return Path.Combine(recordDir, $"{today}.csv");
+        }
+
+        /// <summary>
+        /// 初始化删除记录文件
+        /// </summary>
+        private static void InitializeDeleteRecord(string recordPath)
+        {
+            try
+            {
+                string recordDir = Path.GetDirectoryName(recordPath) ?? "";
+                if (!Directory.Exists(recordDir))
+                {
+                    Directory.CreateDirectory(recordDir);
+                }
+
+                if (!File.Exists(recordPath))
+                {
+                    var header = "删除时间,文件路径" + Environment.NewLine;
+                    File.WriteAllText(recordPath, header, Encoding.UTF8);
+                    LogHelper.Logger.Information($"创建删除记录文件：{recordPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Logger.Error($"初始化删除记录文件异常：{ex.Message}", ex);
+            }
         }
 
         /// <summary>

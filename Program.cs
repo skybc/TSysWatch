@@ -9,11 +9,9 @@ internal partial class Program
 {
     private static void Main(string[] args)
     {
-        MonitorWindow monitorWindow = new MonitorWindow();
         AutoDeleteFile.Start();
         AutoCopyFile.Start();
         AutoMoveFile.Start();
-        Task.Run(monitorWindow.RunMonitor);
         
         var builder = WebApplication.CreateBuilder(args).Inject();
         builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation().AddInject();
@@ -23,6 +21,11 @@ internal partial class Program
         builder.Services.AddSingleton<CpuCoreConfigManager>();
         builder.Services.AddSingleton<ICpuCoreManagerService, CpuCoreManagerServiceWrapper>();
         builder.Services.AddHostedService<CpuCoreManagerService>();
+
+        // 注册硬件监控服务
+        builder.Services.AddSingleton<HardwareMonitorConfigManager>();
+        builder.Services.AddSingleton<HardwareDataCollectionService>();
+        builder.Services.AddHostedService<HardwareDataRecordingService>();
 
         var app = builder.Build().UseDefaultServiceProvider();
         

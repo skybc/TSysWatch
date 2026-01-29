@@ -8,6 +8,98 @@
             <div class="update-info">
                 <span class="last-update">最后更新: <span id="lastUpdateTime">加载中...</span></span>
                 <button class="refresh-btn" onclick="manualRefresh()">🔄 刷新数据</button>
+                <button class="btn-config" onclick="openConfigModal()">⚙️ 配置</button>
+                <button class="btn-config" onclick="openDownloadModal()">📥 下载记录</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 配置弹框 -->
+    <div id="configModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>定时记录配置</h2>
+                <button class="modal-close" onclick="closeConfigModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="recordingConfigForm">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="enableTimedRecording" />
+                            <span>启用定时记录</span>
+                        </label>
+                        <span class="help-text">启用后将定期采集硬件数据并保存为CSV文件</span>
+                    </div>
+
+                    <div class="form-group" id="intervalGroup" style="display: none;">
+                        <label for="recordingInterval">定时记录间隔（秒）</label>
+                        <div class="input-group">
+                            <input type="number" id="recordingInterval" min="2" value="10" />
+                            <span class="help-text">最小值为2秒</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="csvPath">CSV文件存储目录</label>
+                        <input type="text" id="csvPath" value="HardwareData" />
+                        <span class="help-text">相对于应用程序目录的路径</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>选择要记录的传感器类型</label>
+                        <div class="sensor-selection">
+                            <button type="button" class="btn-small" onclick="selectAllSensors()">全选</button>
+                            <button type="button" class="btn-small" onclick="clearAllSensors()">全不选</button>
+                        </div>
+                        <div class="sensor-types-grid">
+                            @foreach (var sensorType in Model.AvailableSensorTypes)
+                            {
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="sensorTypes" value="@sensorType" checked />
+                                    @GetSensorTypeDisplay(sensorType)
+                                </label>
+                            }
+                        </div>
+                        <span class="help-text">不选择表示记录所有类型的传感器</span>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-primary" onclick="saveRecordingConfig()">保存配置</button>
+                        <button type="button" class="btn-secondary" onclick="closeConfigModal()">关闭</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 下载历史记录弹框 -->
+    <div id="downloadModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>下载硬件监控历史记录</h2>
+                <button class="modal-close" onclick="closeDownloadModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="startDate">开始日期</label>
+                    <input type="date" id="startDate" />
+                </div>
+
+                <div class="form-group">
+                    <label for="endDate">结束日期</label>
+                    <input type="date" id="endDate" />
+                </div>
+
+                <div class="form-group">
+                    <button type="button" class="btn-primary" onclick="loadCsvFiles()">查询文件</button>
+                </div>
+
+                <div id="filesList" class="files-list"></div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-primary" onclick="downloadCsvZip()">下载选中范围</button>
+                    <button type="button" class="btn-secondary" onclick="closeDownloadModal()">关闭</button>
+                </div>
             </div>
         </div>
     </div>
@@ -39,6 +131,7 @@
         justify-content: space-between;
         align-items: center;
         gap: 20px;
+        flex-wrap: wrap;
     }
 
     .hardware-header h1 {
@@ -64,7 +157,7 @@
         font-weight: 500;
     }
 
-    .refresh-btn {
+    .refresh-btn, .btn-config {
         background: rgba(255, 255, 255, 0.2);
         color: white;
         border: 1px solid rgba(255, 255, 255, 0.3);
@@ -76,15 +169,246 @@
         transition: all 0.3s ease;
     }
 
-    .refresh-btn:hover {
+    .refresh-btn:hover, .btn-config:hover {
         background: rgba(255, 255, 255, 0.3);
         border-color: rgba(255, 255, 255, 0.5);
     }
 
-    .refresh-btn:active {
+    .refresh-btn:active, .btn-config:active {
         transform: scale(0.98);
     }
 
+    /* 模态框样式 */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        animation: fadeIn 0.3s ease;
+    }
+
+    .modal.hidden {
+        display: none;
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        width: 90%;
+        max-width: 500px;
+        max-height: 80vh;
+        overflow-y: auto;
+        animation: slideUp 0.3s ease;
+    }
+
+    @@keyframes slideUp {
+        from {
+            transform: translateY(50px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border-bottom: 1px solid #e5e5e5;
+        background: #f9f9f9;
+    }
+
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.3rem;
+        color: #333;
+    }
+
+    .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        color: #999;
+        transition: color 0.3s ease;
+    }
+
+    .modal-close:hover {
+        color: #333;
+    }
+
+    .modal-body {
+        padding: 30px;
+    }
+
+    .form-group {
+        margin-bottom: 25px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: #333;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="number"],
+    .form-group input[type="date"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 0.95rem;
+        box-sizing: border-box;
+    }
+
+    .form-group input[type="checkbox"] {
+        margin-right: 8px;
+        width: auto;
+        cursor: pointer;
+    }
+
+    .help-text {
+        display: block;
+        font-size: 0.8rem;
+        color: #999;
+        margin-top: 4px;
+    }
+
+    .input-group {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .input-group input {
+        flex: 1;
+    }
+
+    .sensor-selection {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .btn-small {
+        padding: 6px 12px;
+        background: #f0f0f0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.3s ease;
+    }
+
+    .btn-small:hover {
+        background: #e5e5e5;
+    }
+
+    .sensor-types-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        font-size: 0.9rem;
+        cursor: pointer;
+    }
+
+    .checkbox-label input {
+        margin-right: 8px;
+        width: auto;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 25px;
+    }
+
+    .btn-primary, .btn-secondary {
+        flex: 1;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+        background: #667eea;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #5568d3;
+    }
+
+    .btn-secondary {
+        background: #e5e5e5;
+        color: #333;
+    }
+
+    .btn-secondary:hover {
+        background: #d5d5d5;
+    }
+
+    .files-list {
+        margin: 20px 0;
+        padding: 15px;
+        background: #fafafa;
+        border-radius: 4px;
+        min-height: 100px;
+        border: 1px solid #e5e5e5;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .files-list.empty {
+        color: #999;
+        text-align: center;
+        padding: 30px 15px;
+    }
+
+    .file-item {
+        padding: 10px;
+        background: white;
+        border-radius: 3px;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border: 1px solid #e5e5e5;
+    }
+
+    /* 硬件容器样式 */
     .hardware-section {
         margin-bottom: 30px;
     }
@@ -241,6 +565,12 @@
     }
 
     /* 响应式设计 */
+    @@media (max-width: 1024px) {
+        .sensor-list {
+            grid-template-columns: 1fr;
+        }
+    }
+
     @@media (max-width: 768px) {
         .hardware-header {
             padding: 20px;
@@ -255,19 +585,24 @@
             align-items: flex-start;
         }
 
-        .sensor-list {
-            grid-template-columns: 1fr;
-        }
-
         .update-info {
             flex-direction: column;
             align-items: flex-start;
             width: 100%;
         }
 
-        .refresh-btn {
+        .refresh-btn, .btn-config {
             width: 100%;
             text-align: center;
+        }
+
+        .modal-content {
+            width: 95%;
+            border-radius: 8px;
+        }
+
+        .sensor-types-grid {
+            grid-template-columns: repeat(2, 1fr);
         }
     }
 </style>
@@ -303,13 +638,220 @@
                 });
         }
 
+        // 配置弹框函数
+        function openConfigModal() {
+            document.getElementById('configModal').classList.remove('hidden');
+            loadRecordingConfig();
+        }
+
+        function closeConfigModal() {
+            document.getElementById('configModal').classList.add('hidden');
+        }
+
+        // 下载弹框函数
+        function openDownloadModal() {
+            document.getElementById('downloadModal').classList.remove('hidden');
+            initDefaultDownloadDates();
+        }
+
+        function closeDownloadModal() {
+            document.getElementById('downloadModal').classList.add('hidden');
+        }
+
+        function initDefaultDownloadDates() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('startDate').value = today;
+            document.getElementById('endDate').value = today;
+            loadCsvFiles();
+        }
+
+        function loadRecordingConfig() {
+            fetch('/HardwareMonitor/GetRecordingConfig')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('enableTimedRecording').checked = data.enableTimedRecording;
+                        document.getElementById('recordingInterval').value = data.recordingIntervalSeconds;
+                        document.getElementById('csvPath').value = data.csvStoragePath;
+
+                        // 显示/隐藏间隔输入框
+                        document.getElementById('intervalGroup').style.display =
+                            data.enableTimedRecording ? 'block' : 'none';
+
+                        // 设置选中的传感器类型
+                        const checkboxes = document.querySelectorAll('input[name="sensorTypes"]');
+                        checkboxes.forEach(cb => {
+                            cb.checked = data.recordedSensorTypes.length === 0 ||
+                                data.recordedSensorTypes.includes(cb.value);
+                        });
+                    }
+                })
+                .catch(error => console.error('加载配置出错:', error));
+        }
+
+        function saveRecordingConfig() {
+            const enableTimedRecording = document.getElementById('enableTimedRecording').checked;
+            const recordingIntervalSeconds = parseInt(document.getElementById('recordingInterval').value) || 10;
+            const csvStoragePath = document.getElementById('csvPath').value.trim();
+
+            const recordedSensorTypes = [];
+            document.querySelectorAll('input[name="sensorTypes"]:checked').forEach(cb => {
+                recordedSensorTypes.push(cb.value);
+            });
+
+            const config = {
+                enableTimedRecording,
+                recordingIntervalSeconds: Math.max(recordingIntervalSeconds, 2),
+                csvStoragePath: csvStoragePath || 'HardwareData',
+                recordedSensorTypes
+            };
+
+            fetch('/HardwareMonitor/SaveRecordingConfig', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('配置保存成功');
+                        closeConfigModal();
+                    } else {
+                        alert('保存配置失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('保存配置出错:', error);
+                    alert('保存配置出错');
+                });
+        }
+
+        function selectAllSensors() {
+            document.querySelectorAll('input[name="sensorTypes"]').forEach(cb => {
+                cb.checked = true;
+            });
+        }
+
+        function clearAllSensors() {
+            document.querySelectorAll('input[name="sensorTypes"]').forEach(cb => {
+                cb.checked = false;
+            });
+        }
+
+        function loadCsvFiles() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            if (!startDate || !endDate) {
+                alert('请选择日期范围');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('startDate', startDate);
+            params.append('endDate', endDate);
+
+            fetch(`/HardwareMonitor/GetCsvFiles?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    const filesList = document.getElementById('filesList');
+                    if (data.success && data.files.length > 0) {
+                        filesList.classList.remove('empty');
+                        filesList.innerHTML = data.files.map(f =>
+                            `<div class="file-item">
+                                <span>${f.name}</span>
+                                <span>${formatFileSize(f.size)}</span>
+                            </div>`
+                        ).join('');
+                    } else {
+                        filesList.classList.add('empty');
+                        filesList.innerHTML = '<div>没有找到符合条件的文件</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('加载文件列表出错:', error);
+                    document.getElementById('filesList').innerHTML = '<div class="empty">加载出错</div>';
+                });
+        }
+
+        function downloadCsvZip() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            if (!startDate || !endDate) {
+                alert('请选择开始和结束日期');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('startDate', startDate);
+            params.append('endDate', endDate);
+
+            window.location.href = `/HardwareMonitor/DownloadCsvZip?${params.toString()}`;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // 监听启用定时记录的复选框
+        document.getElementById('enableTimedRecording')?.addEventListener('change', function () {
+            document.getElementById('intervalGroup').style.display = this.checked ? 'block' : 'none';
+        });
+
+        // 点击模态框背景关闭
+        document.getElementById('configModal')?.addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeConfigModal();
+            }
+        });
+
+        document.getElementById('downloadModal')?.addEventListener('click', function (e) {
+            if (e.target === this) {
+                closeDownloadModal();
+            }
+        });
+
         // 页面加载时更新时间
         updateLastUpdateTime();
 
         // 每秒更新一次时间
         setInterval(updateLastUpdateTime, 1000);
 
-        // 每1秒自动刷新一次硬件数据
-        setInterval(refreshHardwareData, 1000);
+        // 每5秒自动刷新一次硬件数据
+        setInterval(refreshHardwareData, 5000);
     </script>
+}
+
+@functions {
+    private string GetSensorTypeDisplay(string sensorType)
+    {
+        return sensorType switch
+        {
+            "Temperature" => "温度",
+            "Voltage" => "电压",
+            "Fan" => "风扇",
+            "Power" => "功率",
+            "Load" => "负载",
+            "Clock" => "时钟",
+            "Data" => "数据",
+            "Flow" => "流量",
+            "Level" => "液位",
+            "Frequency" => "频率",
+            "Current" => "电流",
+            "Energy" => "能量",
+            "SmallData" => "小数据",
+            "Throughput" => "吞吐量",
+            "TimeSpan" => "时长",
+            "Noise" => "噪声",
+            "Humidity" => "湿度",
+            _ => sensorType
+        };
+    }
 }

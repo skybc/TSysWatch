@@ -7,6 +7,49 @@
 <h2>自动删除文件管理</h2>
 
 <div class="row">
+    <div class="col-12 mb-3">
+        <button type="button" class="btn btn-primary" id="downloadRecordsBtn">
+            <i class="fa fa-download"></i> 📥 下载删除记录
+        </button>
+    </div>
+</div>
+
+<!-- 下载历史记录弹框 -->
+<div id="downloadModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">下载删除记录</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="startDate" class="form-label">开始日期</label>
+                    <input type="date" class="form-control" id="startDate" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="endDate" class="form-label">结束日期</label>
+                    <input type="date" class="form-control" id="endDate" />
+                </div>
+
+                <div class="mb-3">
+                    <button type="button" class="btn btn-primary w-100" id="loadFilesBtn">查询文件</button>
+                </div>
+
+                <div id="filesList" class="alert alert-info">
+                    <small>查询后在此显示文件列表...</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="downloadBtn">下载选中范围</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
     <div class="col-12 mb-4">
         <div class="card">
             <div class="card-header">
@@ -128,8 +171,33 @@
 
 <script>
 let editingDriveLetter = null;
+let downloadModal = null;
 
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化下载弹框
+    downloadModal = new bootstrap.Modal(document.getElementById('downloadModal'), {
+        keyboard: false
+    });
+
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('startDate').value = today;
+    document.getElementById('endDate').value = today;
+
+    // 下载记录按钮
+    document.getElementById('downloadRecordsBtn').addEventListener('click', function() {
+        downloadModal.show();
+    });
+
+    // 查询文件按钮
+    document.getElementById('loadFilesBtn').addEventListener('click', function() {
+        loadDeleteRecordFiles();
+    });
+
+    // 下载按钮
+    document.getElementById('downloadBtn').addEventListener('click', function() {
+        downloadDeleteRecords();
+    });
+
     // 使用委托事件监听，处理编辑和删除按钮
     document.addEventListener('click', function(event) {
         const button = event.target;
@@ -143,6 +211,72 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+/**
+ * 加载删除记录文件列表
+ */
+function loadDeleteRecordFiles() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    if (!startDate || !endDate) {
+        alert('请选择开始和结束日期');
+        return;
+    }
+
+    fetch(`/AutoDelete/GetDeleteRecordFiles?startDate=${startDate}&endDate=${endDate}`)
+        .then(response => response.json())
+        .then(data => {
+            const filesList = document.getElementById('filesList');
+            if (data.files && data.files.length > 0) {
+                let html = '<table class="table table-sm"><tbody>';
+                data.files.forEach(file => {
+                    html += `<tr>
+                        <td>${file.fileName}</td>
+                        <td class="text-end">${formatFileSize(file.size)}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+                filesList.innerHTML = html;
+                filesList.className = 'alert alert-success';
+            } else {
+                filesList.innerHTML = '<small style="color: #856404;">日期范围内没有记录文件</small>';
+                filesList.className = 'alert alert-warning';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('filesList').innerHTML = '<small style="color: #721c24;">错误: ' + error.message + '</small>';
+            document.getElementById('filesList').className = 'alert alert-danger';
+        });
+}
+
+/**
+ * 下载删除记录
+ */
+function downloadDeleteRecords() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    if (!startDate || !endDate) {
+        alert('请选择开始和结束日期');
+        return;
+    }
+
+    window.location.href = `/AutoDelete/DownloadDeleteRecords?startDate=${startDate}&endDate=${endDate}`;
+}
+
+/**
+ * 格式化文件大小
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
 
 /**
  * 刷新配置和驱动器列表

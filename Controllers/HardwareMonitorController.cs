@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using TSysWatch.Models;
 using System;
 using System.Collections.Generic;
+using System.IO.Compression;
+using TSysWatch.Services;
 
 namespace TSysWatch.Controllers
 {
@@ -12,6 +14,19 @@ namespace TSysWatch.Controllers
     public class HardwareMonitorController : Controller
     {
         private static Computer _computer;
+        private readonly HardwareMonitorConfigManager _configManager;
+        private readonly HardwareDataCollectionService _collectionService;
+        private readonly ILogger<HardwareMonitorController> _logger;
+
+        public HardwareMonitorController(
+            HardwareMonitorConfigManager configManager,
+            HardwareDataCollectionService collectionService,
+            ILogger<HardwareMonitorController> logger)
+        {
+            _configManager = configManager;
+            _collectionService = collectionService;
+            _logger = logger;
+        }
 
         /// <summary>
         /// 初始化硬件监控
@@ -83,11 +98,181 @@ namespace TSysWatch.Controllers
         }
 
         /// <summary>
+        /// 获取定时记录配置
+        /// </summary>
+        [HttpGet]
+        public IActionResult GetRecordingConfig()
+        {
+            try
+            {
+                var config = _configManager.GetConfig();
+                return Json(new
+                {
+                    success = true,
+                    enableTimedRecording = config.EnableTimedRecording,
+                    recordingIntervalSeconds = config.RecordingIntervalSeconds,
+                    csvStoragePath = config.CsvStoragePath,
+                    recordedSensorTypes = config.RecordedSensorTypes
+                });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// 保存定时记录配置
+        /// </summary>
+        [HttpPost]
+        public IActionResult SaveRecordingConfig(
+            [FromBody] RecordingConfigRequest request)
+        {
+            try
+            {
+                var config = _configManager.GetConfig();
+                config.EnableTimedRecording = request.EnableTimedRecording;
+                config.RecordingIntervalSeconds = Math.Max(request.RecordingIntervalSeconds, 2);
+                config.CsvStoragePath = string.IsNullOrWhiteSpace(request.CsvStoragePath)
+                    ? "HardwareData"
+                    : request.CsvStoragePath;
+                config.RecordedSensorTypes = request.RecordedSensorTypes ?? new List<string>();
+
+                if (_configManager.SaveConfig(config))
+                {
+                    return Json(new { success = true, message = "配置已保存" });
+                }
+                else
+                {
+                    return Json(new { success = false, message = "保存配置失败" });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"保存配置出错: {ex.Message}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// 获取可用的CSV文件列表
+        /// </summary>
+        [HttpGet]
+        public IActionResult GetCsvFiles(string startDate = null, string endDate = null)
+        {
+            try
+            {
+                DateTime? start = null;
+                DateTime? end = null;
+
+                if (!string.IsNullOrWhiteSpace(startDate) &&
+                    DateTime.TryParse(startDate, out var parsedStart))
+                {
+                    start = parsedStart;
+                }
+
+                if (!string.IsNullOrWhiteSpace(endDate) &&
+                    DateTime.TryParse(endDate, out var parsedEnd))
+                {
+                    end = parsedEnd.AddDays(1).AddSeconds(-1);
+                }
+
+                var files = _collectionService.GetCsvFiles(start, end);
+                var fileList = files.Select(f => new
+                {
+                    name = Path.GetFileName(f),
+                    path = f,
+                    size = new FileInfo(f).Length,
+                    created = System.IO.File.GetCreationTime(f)
+                }).ToList();
+
+                return Json(new
+                {
+                    success = true,
+                    files = fileList
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"获取CSV文件列表出错: {ex.Message}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// 下载日期范围内的CSV文件压缩包
+        /// </summary>
+        [HttpGet]
+        public IActionResult DownloadCsvZip(string startDate = null, string endDate = null)
+        {
+            try
+            {
+                DateTime? start = null;
+                DateTime? end = null;
+
+                if (!string.IsNullOrWhiteSpace(startDate) &&
+                    DateTime.TryParse(startDate, out var parsedStart))
+                {
+                    start = parsedStart;
+                }
+
+                if (!string.IsNullOrWhiteSpace(endDate) &&
+                    DateTime.TryParse(endDate, out var parsedEnd))
+                {
+                    end = parsedEnd.AddDays(1).AddSeconds(-1);
+                }
+
+                var files = _collectionService.GetCsvFiles(start, end);
+
+                if (files.Count == 0)
+                {
+                    return Json(new { success = false, message = "没有找到要下载的文件" });
+                }
+
+                // 创建临时zip文件
+                var zipFileName = $"HardwareData_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+                var zipPath = Path.Combine(Path.GetTempPath(), zipFileName);
+
+                using (var zipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+                {
+                    foreach (var filePath in files)
+                    {
+                        var entryName = Path.GetFileName(filePath);
+                        zipArchive.CreateEntryFromFile(filePath, entryName);
+                    }
+                }
+
+                var fileBytes = System.IO.File.ReadAllBytes(zipPath);
+
+                // 清理临时文件
+                try
+                {
+                    System.IO.File.Delete(zipPath);
+                }
+                catch { }
+
+                return base.File(fileBytes, "application/zip", zipFileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"下载ZIP文件出错: {ex.Message}");
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// 获取硬件监控数据
         /// </summary>
         private HardwareMonitorViewModel GetHardwareMonitorData()
         {
             var viewModel = new HardwareMonitorViewModel();
+            var config = _configManager.GetConfig();
+
+            // 加载配置到ViewModel
+            viewModel.EnableTimedRecording = config.EnableTimedRecording;
+            viewModel.RecordingIntervalSeconds = config.RecordingIntervalSeconds;
+            viewModel.CsvStoragePath = config.CsvStoragePath;
+            viewModel.RecordedSensorTypes = config.RecordedSensorTypes;
 
             // 更新所有硬件信息
             _computer.Accept(new UpdateVisitor());
@@ -256,6 +441,32 @@ namespace TSysWatch.Controllers
                 _ => "normal"
             };
         }
+    }
+
+    /// <summary>
+    /// 定时记录配置请求模型
+    /// </summary>
+    public class RecordingConfigRequest
+    {
+        /// <summary>
+        /// 是否启用定时记录
+        /// </summary>
+        public bool EnableTimedRecording { get; set; }
+
+        /// <summary>
+        /// 定时记录间隔（秒）
+        /// </summary>
+        public int RecordingIntervalSeconds { get; set; } = 10;
+
+        /// <summary>
+        /// CSV存储目录
+        /// </summary>
+        public string CsvStoragePath { get; set; }
+
+        /// <summary>
+        /// 需要记录的传感器类型列表
+        /// </summary>
+        public List<string> RecordedSensorTypes { get; set; }
     }
 
     /// <summary>

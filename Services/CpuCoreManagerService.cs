@@ -12,6 +12,7 @@ namespace TSysWatch.Services
         private readonly CpuCoreConfigManager _configManager;
         private Timer? _scanTimer;
         private readonly object _timerLock = new object();
+        private volatile bool _isScanning = false;
 
         public CpuCoreManagerService(
             ILogger<CpuCoreManagerService> logger,
@@ -128,13 +129,22 @@ namespace TSysWatch.Services
         /// </summary>
         private void OnScanTimer(object? state)
         {
+            // 防止重叠执行
+            if (_isScanning)
+                return;
+
             try
             {
+                _isScanning = true;
                 _coreManager.ScanAndApplyConfigurations();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "定时扫描过程中发生错误");
+            }
+            finally
+            {
+                _isScanning = false;
             }
         }
 

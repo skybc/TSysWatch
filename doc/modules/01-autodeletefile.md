@@ -167,7 +167,64 @@ public class DiskCleanupConfigDisplay
 - 配置列表支持异步加载
 - 使用 JSON 格式配置，减少 I/O 操作
 
+## 删除历史记录下载功能
+
+### 功能概述
+用户可以下载指定日期范围内的删除操作记录，支持按日期查询和压缩打包下载。
+
+### 操作流程
+1. 点击页面的 **"📥 下载删除记录"** 按钮
+2. 弹出模态框，选择"开始日期"和"结束日期"（默认当天）
+3. 点击 **"查询文件"** 按钮，显示该日期范围内的 CSV 记录文件
+4. 点击 **"下载选中范围"** 按钮，打包并下载 ZIP 文件
+
+### 数据格式
+记录位置：`record/AutoDeleteFile/yyyyMMdd.csv`
+
+CSV 格式：
+```
+删除时间,文件路径
+2025-01-28 10:30:45,C:\Temp\oldfile.txt
+2025-01-28 10:30:46,C:\Temp\oldfile2.txt
+```
+
+### API 端点
+```
+GET /AutoDelete/GetDeleteRecordFiles?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+返回: { "files": [ { "fileName": "yyyyMMdd.csv", "size": 1024 }, ... ] }
+
+GET /AutoDelete/DownloadDeleteRecords?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+返回: 压缩后的 ZIP 文件包
+```
+
+### 前端实现
+- **UI 组件**：Bootstrap Modal 弹框
+- **日期选择**：HTML5 date input
+- **文件列表**：表格展示文件名和大小
+- **大小格式化**：自动转换为 B/KB/MB/GB
+
+### JavaScript 核心函数
+```javascript
+// 查询删除记录文件列表
+function loadDeleteRecordFiles() { }
+
+// 下载删除记录 ZIP 包
+function downloadDeleteRecords() { }
+
+// 格式化文件大小
+function formatFileSize(bytes) { }
+```
+
 ## 最近更新
+
+### 2025-01-28（当前版本）
+- ✅ 实现删除历史记录下载功能
+- ✅ 创建 Bootstrap Modal 弹框 UI
+- ✅ 添加 `/AutoDelete/GetDeleteRecordFiles` API 端点
+- ✅ 添加 `/AutoDelete/DownloadDeleteRecords` API 端点
+- ✅ 实现文件查询和压缩打包逻辑
+- ✅ 集成 formatFileSize() 文件大小格式化函数
+- ✅ 编译验证通过（0 errors, 40 warnings）
 
 ### 2025-01-08
 - ✅ 完成 Razor 视图重构，符合企业级架构标准

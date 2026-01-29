@@ -1,0 +1,6 @@
+{
+  "enableTimedRecording": false,
+  "recordingIntervalSeconds": 10,
+  "csvStoragePath": "HardwareData",
+  "recordedSensorTypes": []
+}

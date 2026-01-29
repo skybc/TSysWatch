@@ -1,4 +1,189 @@
 @{
     ViewData["Title"] = "首页";
 }
-<h1>欢迎来到 TSysWatcha</h1>
+
+<div class="container py-5">
+    <!-- 欢迎头部 -->
+    <div class="text-center mb-5">
+        <h1 class="display-4 fw-bold mb-3">🚀 TSysWatch 系统管理工具</h1>
+    </div>
+
+    <!-- 自动化工具 -->
+    <section class="mb-5">
+        <h2 class="h3 fw-bold mb-4">
+            <i class="bi bi-gear-fill" style="margin-right: 8px;"></i>自动化工具
+        </h2>
+        <div class="row g-4">
+            <!-- 自动删除 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm tool-card" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-trash-alt" style="font-size: 3rem; color: #dc3545;"></i>
+                        </div>
+                        <h5 class="card-title text-center fw-bold">📥 自动删除</h5>
+                        <p class="card-text text-muted text-center mb-3">
+                            自动清理磁盘，管理删除规则，按需配置删除策略
+                        </p>
+                        <a href="/AutoDelete/Index" class="btn btn-danger w-100 btn-sm">进入</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 自动拷贝 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm tool-card" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-copy" style="font-size: 3rem; color: #0d6efd;"></i>
+                        </div>
+                        <h5 class="card-title text-center fw-bold">📋 自动拷贝</h5>
+                        <p class="card-text text-muted text-center mb-3">
+                            自动备份文件，增量拷贝，跨磁盘同步数据
+                        </p>
+                        <a href="/AutoCopyFile/Index" class="btn btn-primary w-100 btn-sm">进入</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 自动移动 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm tool-card" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-exchange-alt" style="font-size: 3rem; color: #198754;"></i>
+                        </div>
+                        <h5 class="card-title text-center fw-bold">🔄 自动移动</h5>
+                        <p class="card-text text-muted text-center mb-3">
+                            自动文件迁移，跨驱动器移动，智能目录处理
+                        </p>
+                        <a href="/AutoMoveFile/Index" class="btn btn-success w-100 btn-sm">进入</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 系统管理 -->
+    <section class="mb-5">
+        <h2 class="h3 fw-bold mb-4">
+            <i class="bi bi-cpu-fill" style="margin-right: 8px;"></i>系统管理
+        </h2>
+        <div class="row g-4">
+            <!-- CPU 核心管理 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm tool-card" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-microchip" style="font-size: 3rem; color: #fd7e14;"></i>
+                        </div>
+                        <h5 class="card-title text-center fw-bold">⚡ CPU 核心管理</h5>
+                        <p class="card-text text-muted text-center mb-3">
+                            CPU 核心绑定，进程管理，性能优化
+                        </p>
+                        <a href="/CpuCore/Index" class="btn btn-warning w-100 btn-sm">进入</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 硬件监控 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm tool-card" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-chart-line" style="font-size: 3rem; color: #6f42c1;"></i>
+                        </div>
+                        <h5 class="card-title text-center fw-bold">📊 硬件监控</h5>
+                        <p class="card-text text-muted text-center mb-3">
+                            实时监控系统资源，温度、风速、电源状态
+                        </p>
+                        <a href="/HardwareMonitor/Index" class="btn btn-info w-100 btn-sm">进入</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文件管理 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm tool-card" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-folder-open" style="font-size: 3rem; color: #20c997;"></i>
+                        </div>
+                        <h5 class="card-title text-center fw-bold">📁 文件管理</h5>
+                        <p class="card-text text-muted text-center mb-3">
+                            浏览文件系统，查看文件属性，快速访问
+                        </p>
+                        <a href="/FileManager/Index" class="btn btn-success w-100 btn-sm">进入</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据库修复 -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card h-100 shadow-sm tool-card" style="cursor: pointer;">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="fas fa-database" style="font-size: 3rem; color: #5a9f8c;"></i>
+                        </div>
+                        <h5 class="card-title text-center fw-bold">🔧 数据库修复</h5>
+                        <p class="card-text text-muted text-center mb-3">
+                            数据库维护，修复损坏，性能优化
+                        </p>
+                        <a href="/DbRepair/Index" class="btn w-100 btn-sm" style="background-color: #5a9f8c; color: white;">进入</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 快速统计 -->
+    <section class="mt-5 pt-4 border-top">
+        <div class="row g-3 text-center">
+            <div class="col-md-4">
+                <div class="p-3">
+                    <h3 class="h5 fw-bold text-primary">4 个自动化工具</h3>
+                    <p class="text-muted mb-0">自动化处理常见任务</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3">
+                    <h3 class="h5 fw-bold text-success">4 个系统管理工具</h3>
+                    <p class="text-muted mb-0">实时监控系统状态</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3">
+                    <h3 class="h5 fw-bold text-info">1 个统一面板</h3>
+                    <p class="text-muted mb-0">快速访问所有功能</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<style>
+    .tool-card {
+        transition: all 0.3s ease;
+        border: 1px solid #e9ecef;
+    }
+
+    .tool-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175) !important;
+        border-color: #dee2e6;
+    }
+
+    .tool-card .card-body {
+        padding: 1.5rem;
+    }
+
+    .tool-card .btn {
+        font-weight: 500;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+    }
+
+    .tool-card .btn:hover {
+        transform: scale(1.02);
+    }
+</style>

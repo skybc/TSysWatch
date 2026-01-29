@@ -150,7 +150,64 @@ public class AutoCopyConfigDisplay
 | 场景 | 备份、同步 | 清理、整理 |
 | 配置字段 | CopiedDirectory | MovedDirectory |
 
+## 拷贝历史记录下载功能
+
+### 功能概述
+用户可以下载指定日期范围内的拷贝操作记录，支持按日期查询和压缩打包下载。
+
+### 操作流程
+1. 点击页面的 **"📥 下载拷贝记录"** 按钮
+2. 弹出模态框，选择"开始日期"和"结束日期"（默认当天）
+3. 点击 **"查询文件"** 按钮，显示该日期范围内的 CSV 记录文件
+4. 点击 **"下载选中范围"** 按钮，打包并下载 ZIP 文件
+
+### 数据格式
+记录位置：`record/AutoCopyFile/yyyyMMdd.csv`
+
+CSV 格式：
+```
+时间,原文件,目标文件
+2025-01-28 11:00:00,D:\Pictures\photo.jpg,E:\Backup\photo.jpg
+2025-01-28 11:00:01,D:\Pictures\photo2.jpg,E:\Backup\photo2.jpg
+```
+
+### API 端点
+```
+GET /AutoCopyFile/GetCopyRecordFiles?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+返回: { "files": [ { "fileName": "yyyyMMdd.csv", "size": 1024 }, ... ] }
+
+GET /AutoCopyFile/DownloadCopyRecords?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+返回: 压缩后的 ZIP 文件包
+```
+
+### 前端实现
+- **UI 组件**：Bootstrap Modal 弹框
+- **日期选择**：HTML5 date input
+- **文件列表**：表格展示文件名和大小
+- **大小格式化**：自动转换为 B/KB/MB/GB
+
+### JavaScript 核心函数
+```javascript
+// 查询拷贝记录文件列表
+function loadCopyRecordFiles() { }
+
+// 下载拷贝记录 ZIP 包
+function downloadCopyRecords() { }
+
+// 格式化文件大小
+function formatFileSize(bytes) { }
+```
+
 ## 最近更新
+
+### 2025-01-28（当前版本）
+- ✅ 实现拷贝历史记录下载功能
+- ✅ 创建 Bootstrap Modal 弹框 UI
+- ✅ 添加 `/AutoCopyFile/GetCopyRecordFiles` API 端点
+- ✅ 添加 `/AutoCopyFile/DownloadCopyRecords` API 端点
+- ✅ 实现文件查询和压缩打包逻辑
+- ✅ 集成 formatFileSize() 文件大小格式化函数
+- ✅ 编译验证通过（0 errors, 40 warnings）
 
 ### 2025-01-08
 - ✅ 完成 Razor 视图重构，符合企业级架构标准
