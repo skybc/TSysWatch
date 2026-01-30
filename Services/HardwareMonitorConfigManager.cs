@@ -15,7 +15,7 @@ namespace TSysWatch.Services
         public HardwareMonitorConfigManager(ILogger<HardwareMonitorConfigManager> logger)
         {
             _logger = logger;
-            var configDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ini_config");
+            var configDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
             _configFilePath = Path.Combine(configDir, "HardwareMonitor.json");
             
             if (!Directory.Exists(configDir))

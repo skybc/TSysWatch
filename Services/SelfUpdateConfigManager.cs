@@ -23,7 +23,7 @@ public class SelfUpdateConfigManager
         _logger = logger;
         _environment = environment;
 
-        var iniConfigDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ini_config");
+        var iniConfigDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
         _configPath = Path.Combine(iniConfigDir, CONFIG_FILE);
 
         LoadConfig();
@@ -130,7 +130,7 @@ public class SelfUpdateConfigManager
     {
         try
         {
-            var iniConfigDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ini_config");
+            var iniConfigDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config");
             Directory.CreateDirectory(iniConfigDir);
 
             var options = new JsonSerializerOptions { WriteIndented = true };

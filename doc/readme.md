@@ -33,6 +33,7 @@ TSysWatch 是一个 ASP.NET Core Web 应用，提供系统监控、CPU 核心绑
 ### 基础设施模块
 - [数据库维修功能](modules/20-dbrepair.md)
 - [内存优化与内存泄漏修复](modules/30-memory-optimization.md)
+- [端口检测与自适应启动](modules/32-port-detection.md) - 自动检测端口占用并切换可用端口
 - [**Web 自自动更新系统**](modules/self-update.md) - Web 程序主程式化更新，独立 Updater.exe 架构
   - 🎯 [功能说明及使用指南](modules/self-update.md)
 

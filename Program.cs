@@ -13,7 +13,14 @@ internal partial class Program
         AutoCopyFile.Start();
         AutoMoveFile.Start();
         
+        // 获取可用端口
+        var portDetectionService = new PortDetectionService();
+        int availablePort = portDetectionService.GetAvailablePort();
+        
         var builder = WebApplication.CreateBuilder(args).Inject();
+        
+        // 配置动态端口
+        builder.WebHost.UseUrls($"http://*:{availablePort}");
         builder.Services.AddControllersWithViews().AddRazorRuntimeCompilation().AddInject();
 
         // 注册 CPU 核心管理器服务
